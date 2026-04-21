@@ -1,4 +1,7 @@
 from __future__ import absolute_import
+
+from typing import Any
+
 import requests
 from requests.exceptions import HTTPError, RequestException
 
@@ -12,6 +15,7 @@ from ckan.plugins import toolkit
 
 from ckanext.harvest.model import HarvestObject
 from .base import HarvesterBase
+import json
 
 import logging
 log = logging.getLogger(__name__)
@@ -25,6 +29,51 @@ class CKANHarvester(HarvesterBase):
 
     api_version = 2
     action_api_version = 3
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._conversion_dict = {
+  "accrual_periodicity": {
+    "R/PT1S": "http://publications.europa.eu/resource/authority/frequency/CONT",
+    "R/PT1H": "http://publications.europa.eu/resource/authority/frequency/HOURLY",
+    "R/P1D": "http://publications.europa.eu/resource/authority/frequency/DAILY",
+    "R/P1W": "http://publications.europa.eu/resource/authority/frequency/WEEKLY",
+    "R/P0.5M": "http://publications.europa.eu/resource/authority/frequency/BIWEEKLY",
+    "R/P1M": "http://publications.europa.eu/resource/authority/frequency/MONTHLY",
+    "R/P2M": "http://publications.europa.eu/resource/authority/frequency/BIMONTHLY",
+    "R/P3M": "http://publications.europa.eu/resource/authority/frequency/QUARTERLY",
+    "R/P4M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_3",
+    "R/P6M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_2",
+    "R/P1Y": "http://publications.europa.eu/resource/authority/frequency/ANNUAL",
+    "R/P2Y": "http://publications.europa.eu/resource/authority/frequency/BIENNIAL",
+    "R/P4Y": "http://publications.europa.eu/resource/authority/frequency/QUADRENNIAL",
+    "R/P10Y": "http://publications.europa.eu/resource/authority/frequency/DECENNIAL",
+    "eventual": "http://publications.europa.eu/resource/authority/frequency/IRREG"
+  },
+  "superthemes": {
+    "TECH": "http://publications.europa.eu/resource/authority/data-theme/TECH",
+    "ECON": "http://publications.europa.eu/resource/authority/data-theme/ECON",
+    "EDUC": "http://publications.europa.eu/resource/authority/data-theme/EDUC",
+    "SOCI": "http://publications.europa.eu/resource/authority/data-theme/SOCI",
+    "ENER": "http://publications.europa.eu/resource/authority/data-theme/ENER",
+    "GOVE": "http://publications.europa.eu/resource/authority/data-theme/GOVE",
+    "JUST": "http://publications.europa.eu/resource/authority/data-theme/JUST",
+    "ENVI": "http://publications.europa.eu/resource/authority/data-theme/ENVI",
+    "AGRI": "http://publications.europa.eu/resource/authority/data-theme/AGRI",
+    "HEAL": "http://publications.europa.eu/resource/authority/data-theme/HEAL",
+    "TRAN": "http://publications.europa.eu/resource/authority/data-theme/TRAN",
+    "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI"
+  }
+}
+
+
+    def get_conversion_dict(self):
+        try:
+            with open("./assets/mapping_jsons/label_to_value_mapping.json") as f:
+               return json.load(f)
+        except:
+               return None
+
 
     def _get_action_api_offset(self):
         return '/api/%d/action' % self.action_api_version
@@ -179,6 +228,86 @@ class CKANHarvester(HarvesterBase):
             Allows custom harvesters to modify the package dict before
             creating or updating the actual package.
         '''
+
+
+        # Map from extras key -> top-level schema field name
+        EXTRAS_TO_FIELDS = {
+            'accrualPeriodicity': 'dataset_accrualPeriodicity',
+            'superTheme':         'dataset_superTheme',
+            'modified':           'dataset_modified',
+            'Modificado':         'dataset_modified',
+            'spatial':            'dataset_spatial',
+            'language':           'dataset_language',
+
+            # fallback alias used in some datasets
+        }
+
+        # Required schema fields with fallback defaults if not found in extras
+        FIELD_DEFAULTS = {
+            'dataset_accrualPeriodicity': 'http://publications.europa.eu/resource/authority/frequency/CONT',
+            'dataset_description':        package_dict.get('notes', ''),
+            'dataset_hvdcategory':        'categoria 1',
+            'dataset_issued':             package_dict.get('metadata_created', ''),
+            'dataset_modified':           package_dict.get('metadata_modified', ''),
+            'dataset_status':             'http://purl.org/adms/status/Completed',
+            'dataset_superTheme':         'http://publications.europa.eu/resource/authority/data-theme/TECH',
+            'dataset_theme':              'http://publications.europa.eu/resource/authority/data-theme/TECH',
+
+        }
+
+        # Keys that must NOT remain in extras because they collide with schema fields
+        SCHEMA_COLLISION_KEYS = {
+            'modified',       # collides → 'There is a schema field with the same name'
+            'Modificado',
+            'spatial',
+            'temporal'
+        }
+
+        # --- 1. Promote extras to top-level fields ---
+        remaining_extras = []
+        for extra in package_dict.get('extras', []):
+            key = extra.get('key', '')
+            value = extra.get('value', '')
+
+            if key in EXTRAS_TO_FIELDS:
+                field_name = EXTRAS_TO_FIELDS[key]
+                # Only set if not already set from a previous extra
+                if not package_dict.get(field_name):
+                    package_dict[field_name] = value
+                # Do NOT keep this extra (either promoted or colliding)
+            elif key in SCHEMA_COLLISION_KEYS:
+                # Drop it — it would cause 'There is a schema field with the same name'
+                pass
+            else:
+                remaining_extras.append(extra)
+
+        package_dict['extras'] = remaining_extras
+
+        # --- 2. Fill in any required fields still missing ---
+        for field, default in FIELD_DEFAULTS.items():
+            if not package_dict.get(field):
+                package_dict[field] = default
+
+        # --- 3. mapeo de campos y reemplazo de valores ---
+        if package_dict.get('title'):
+            package_dict["dataset_title"]=package_dict.pop('title',"")
+
+        if not package_dict.get('dataset_description'):
+            package_dict['dataset_description'] = package_dict.get('notes', '')
+        log.error(f"esto es lo que viene de superTheme del usuario{type(package_dict.get('dataset_superTheme'))}")
+
+        if isinstance(self._conversion_dict,dict):
+            ap = self._conversion_dict.get("accrual_periodicity",{})
+            st = self._conversion_dict.get("superthemes",{})
+            ap_value = package_dict.get('dataset_accrualPeriodicity')
+            package_dict['dataset_accrualPeriodicity'] = ap.get(ap_value,ap_value)
+            st_value = package_dict.get('dataset_superTheme')
+            st_value = eval(st_value)
+            new_themes = []
+            for element in st_value:
+                new_themes.append(st.get(element,element))
+            log.error(f"esto es lo que tiene new_themes:{new_themes}")
+            package_dict['dataset_superTheme'] = new_themes[0]
         return package_dict
 
     def gather_stage(self, harvest_job):
