@@ -1,0 +1,33 @@
+{
+  "accrual_periodicity": {
+    "R/PT1S": "http://publications.europa.eu/resource/authority/frequency/CONT",
+    "R/PT1H": "http://publications.europa.eu/resource/authority/frequency/HOURLY",
+    "R/P1D": "http://publications.europa.eu/resource/authority/frequency/DAILY",
+    "R/P1W": "http://publications.europa.eu/resource/authority/frequency/WEEKLY",
+    "R/P0.5M": "http://publications.europa.eu/resource/authority/frequency/BIWEEKLY",
+    "R/P1M": "http://publications.europa.eu/resource/authority/frequency/MONTHLY",
+    "R/P2M": "http://publications.europa.eu/resource/authority/frequency/BIMONTHLY",
+    "R/P3M": "http://publications.europa.eu/resource/authority/frequency/QUARTERLY",
+    "R/P4M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_3",
+    "R/P6M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_2",
+    "R/P1Y": "http://publications.europa.eu/resource/authority/frequency/ANNUAL",
+    "R/P2Y": "http://publications.europa.eu/resource/authority/frequency/BIENNIAL",
+    "R/P4Y": "http://publications.europa.eu/resource/authority/frequency/QUADRENNIAL",
+    "R/P10Y": "http://publications.europa.eu/resource/authority/frequency/DECENNIAL",
+    "eventual": "http://publications.europa.eu/resource/authority/frequency/IRREG"
+  },
+  "superthemes": {
+    "TECH": "http://publications.europa.eu/resource/authority/data-theme/TECH",
+    "ECON": "http://publications.europa.eu/resource/authority/data-theme/ECON",
+    "EDUC": "http://publications.europa.eu/resource/authority/data-theme/EDUC",
+    "SOCI": "http://publications.europa.eu/resource/authority/data-theme/SOCI",
+    "ENER": "http://publications.europa.eu/resource/authority/data-theme/ENER",
+    "GOVE": "http://publications.europa.eu/resource/authority/data-theme/GOVE",
+    "JUST": "http://publications.europa.eu/resource/authority/data-theme/JUST",
+    "ENVI": "http://publications.europa.eu/resource/authority/data-theme/ENVI",
+    "AGRI": "http://publications.europa.eu/resource/authority/data-theme/AGRI",
+    "HEAL": "http://publications.europa.eu/resource/authority/data-theme/HEAL",
+    "TRAN": "http://publications.europa.eu/resource/authority/data-theme/TRAN",
+    "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI"
+  }
+}
