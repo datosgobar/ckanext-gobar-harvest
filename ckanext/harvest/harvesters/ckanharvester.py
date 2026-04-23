@@ -32,7 +32,9 @@ class CKANHarvester(HarvesterBase):
 
     @property
     def fields_options(self):
-        if hasattr(self, '_field_options') and self._field_options:
+        if not hasattr(self,'_field_options'):
+            self._field_options = None
+        if self._field_options:
             return self._field_options
 
         path = os.path.join(os.path.dirname(__file__), '../assets/fields_options.json')
@@ -47,7 +49,7 @@ class CKANHarvester(HarvesterBase):
         return self._field_options
 
     def get_field_options(self, field_name):
-        return self._field_options.get(field_name, {})
+        return self.fields_options.get(field_name, {})
 
     def _get_action_api_offset(self):
         return '/api/%d/action' % self.action_api_version
@@ -268,7 +270,6 @@ class CKANHarvester(HarvesterBase):
 
         if not package_dict.get('dataset_description'):
             package_dict['dataset_description'] = package_dict.get('notes', '')
-        log.error(f"esto es lo que viene de superTheme del usuario{type(package_dict.get('dataset_superTheme'))}")
 
         ap_value = package_dict.get('dataset_accrualPeriodicity')
         package_dict['dataset_accrualPeriodicity'] = self.get_field_options("accrual_periodicity").get(ap_value,ap_value)
