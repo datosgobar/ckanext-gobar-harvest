@@ -226,8 +226,8 @@ class CKANHarvester(HarvesterBase):
             'dataset_issued':             package_dict.get('metadata_created', ''),
             'dataset_modified':           package_dict.get('metadata_modified', ''),
             'dataset_status':             'http://purl.org/adms/status/Completed',
-            'dataset_superTheme':         '["http://publications.europa.eu/resource/authority/data-theme/TECH"]',
-            'dataset_theme':              'http://publications.europa.eu/resource/authority/data-theme/TECH'
+            'dataset_superTheme':         '["Sin tema"]',
+            'dataset_theme':              'Tema específico 1'
 
         }
 
