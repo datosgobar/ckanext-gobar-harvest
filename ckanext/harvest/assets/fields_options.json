@@ -29,6 +29,6 @@
     "HEAL": "http://publications.europa.eu/resource/authority/data-theme/HEAL",
     "TRAN": "http://publications.europa.eu/resource/authority/data-theme/TRAN",
     "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI",
-    "INTR":"http://publications.europa.eu/resource/authority/data-theme/INTR"
+    "INTR": "http://publications.europa.eu/resource/authority/data-theme/INTR"
   }
 }
