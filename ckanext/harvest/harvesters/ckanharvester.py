@@ -265,8 +265,8 @@ class CKANHarvester(HarvesterBase):
                 package_dict[field] = default
 
         # --- 3. mapeo de campos y reemplazo de valores ---
-        if package_dict.get('title'):
-            package_dict["dataset_title"]=package_dict.pop('title',"")
+        #if package_dict.get('title'):
+        #    package_dict["dataset_title"]=package_dict.pop('title',"")
 
         if not package_dict.get('dataset_description'):
             package_dict['dataset_description'] = package_dict.get('notes', '')
@@ -285,6 +285,10 @@ class CKANHarvester(HarvesterBase):
         package_dict['dataset_superTheme'] = new_themes[0]
 
         return package_dict
+
+    #TODO: definir sta función para mapear campos de recursos
+    def modify_resource_dict(self, resource):
+            pass
 
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
