@@ -41,6 +41,7 @@ build-backend = "setuptools.build_meta"
 harvest = "ckanext.harvest.plugin:Harvest"
 ckan_harvester = "ckanext.harvest.harvesters:CKANHarvester"
 xlsx_harvester = "ckanext.harvest.harvesters:XLSXHarvester"
+xlsx_harvester_claude = "ckanext.harvest.harvesters:XLSXHarvesterClaude"
 ods_harvester = "ckanext.harvest.harvesters:ODSHarvester"
 
 # Test plugins
