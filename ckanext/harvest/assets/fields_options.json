@@ -30,5 +30,37 @@
     "TRAN": "http://publications.europa.eu/resource/authority/data-theme/TRAN",
     "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI",
     "INTR": "http://publications.europa.eu/resource/authority/data-theme/INTR"
+  },
+  "province_codes": {
+
+    "02": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
+    "06": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Buenos-Aires",
+    "10": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Catamarca",
+    "14": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Cordoba",
+    "18": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Corrientes",
+    "22": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Chaco",
+    "26": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Chubut",
+    "30": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Entre-Rios",
+    "34": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Formosa",
+    "38": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Jujuy",
+    "42": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/La-Pampa",
+    "46": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/La-Rioja",
+    "50": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Mendoza",
+    "54": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Misiones",
+    "58": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Neuquen",
+    "62": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Rio-Negro",
+    "66": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Salta",
+    "70": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/San-Juan",
+    "74": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/San-Luis",
+    "78": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santa-Cruz",
+    "82": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santa-Fe",
+    "86": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santiago-del-Estero",
+    "90": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tucuman",
+    "94": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tierra-del-Fuego"
+},
+  "distribution_formats": {
+    "ZIP": "https://www.iana.org/assignments/media-types/application/zip",
+    "CSV": "https://www.iana.org/assignments/media-types/text/csv",
+    "PDF": "https://www.iana.org/assignments/media-types/application/pdf"
   }
 }

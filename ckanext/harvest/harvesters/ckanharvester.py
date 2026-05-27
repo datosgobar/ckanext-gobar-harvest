@@ -205,40 +205,34 @@ class CKANHarvester(HarvesterBase):
             creating or updating the actual package.
         '''
 
+        #Mapeo de campos que no están en extras
 
-        # Map from extras key -> top-level schema field name
+        ANDINO_V1_DATASET_CKAN_MAP = {
+            "notes": "dataset_description",
+            "author": "dataset_publisher_name",
+            "author_email": "dataset_publisher_mbox",
+        }
+
+        for src, dst in ANDINO_V1_DATASET_CKAN_MAP.items():
+            if src in package_dict:
+                package_dict[dst] = package_dict.pop(src)
+
         EXTRAS_TO_FIELDS = {
             'accrualPeriodicity': 'dataset_accrualPeriodicity',
             'superTheme':         'dataset_superTheme',
             'modified':           'dataset_modified',
             'Modificado':         'dataset_modified',
+            'Publicado':          'dataset_issued',
             'spatial':            'dataset_spatial',
             'language':           'dataset_language',
-
-            # fallback alias used in some datasets
+            'temporal':           'temporal_start'
         }
-
-        # Required schema fields with fallback defaults if not found in extras
-        FIELD_DEFAULTS = {
-            'dataset_accrualPeriodicity': 'http://publications.europa.eu/resource/authority/frequency/CONT',
-            'dataset_description':        package_dict.get('notes', ''),
-            'dataset_hvdcategory':        'categoria 1',
-            'dataset_issued':             package_dict.get('metadata_created', ''),
-            'dataset_modified':           package_dict.get('metadata_modified', ''),
-            'dataset_status':             'http://purl.org/adms/status/Completed',
-            'dataset_superTheme':         '["Sin tema"]',
-            'dataset_theme':              'Tema específico 1'
-
-        }
-
-        # Keys that must NOT remain in extras because they collide with schema fields
         SCHEMA_COLLISION_KEYS = {
-            'modified',       # collides → 'There is a schema field with the same name'
+            'modified',  # collides → 'There is a schema field with the same name'
             'Modificado',
             'spatial',
             'temporal'
         }
-
         # --- 1. Promote extras to top-level fields ---
         remaining_extras = []
         for extra in package_dict.get('extras', []):
@@ -247,48 +241,139 @@ class CKANHarvester(HarvesterBase):
 
             if key in EXTRAS_TO_FIELDS:
                 field_name = EXTRAS_TO_FIELDS[key]
-                # Only set if not already set from a previous extra
                 if not package_dict.get(field_name):
                     package_dict[field_name] = value
-                # Do NOT keep this extra (either promoted or colliding)
             elif key in SCHEMA_COLLISION_KEYS:
-                # Drop it — it would cause 'There is a schema field with the same name'
                 pass
             else:
                 remaining_extras.append(extra)
-
         package_dict['extras'] = remaining_extras
 
-        # --- 2. Fill in any required fields still missing ---
-        for field, default in FIELD_DEFAULTS.items():
-            if not package_dict.get(field):
-                package_dict[field] = default
+        # --- 2. Agregar y transformar campos si corresponde ---
 
-        # --- 3. mapeo de campos y reemplazo de valores ---
-        #if package_dict.get('title'):
-        #    package_dict["dataset_title"]=package_dict.pop('title',"")
-
-        if not package_dict.get('dataset_description'):
-            package_dict['dataset_description'] = package_dict.get('notes', '')
-
+        #Pasa accrualPeriodicity de valores permitidos viejos a valores permitidos nuevos (en caso de tener valores viejos)
         ap_value = package_dict.get('dataset_accrualPeriodicity')
-        package_dict['dataset_accrualPeriodicity'] = self.get_field_options("accrual_periodicity").get(ap_value,ap_value)
+        if ap_value:
+          package_dict['dataset_accrualPeriodicity'] = self.get_field_options("accrual_periodicity").get(ap_value, ap_value)
+        else:
+          package_dict['dataset_accrualPeriodicity']= "http://publications.europa.eu/resource/authority/frequency/IRREG"
+
+        #Pasa dataset_superTheme de valores permitidos viejos a valores permitidos nuevos (en caso de tener valores viejos)
         st_value = package_dict.get('dataset_superTheme')
-        st_value = eval(st_value)  # TODO: Revisar mecanismos de seguridad para evitar inyección de código
-        # import ast
-        # st_value = ast.literal_eval(st_value)
+        if st_value:
+            try:
+                st_list = json.loads(st_value) if isinstance(st_value, str) else st_value
+                log.error(f"esto es lo que saca de supertheme{st_list}")
+            except (ValueError, TypeError):
+                st_list = [st_value]
 
-        new_themes = []
-        for element in st_value:
-            new_themes.append(self.get_field_options("superthemes").get(element,element))
+            superthemes = self.get_field_options("superthemes")
+            package_dict['dataset_superTheme'] = [
+                superthemes.get(element, element) for element in st_list
+            ]
+        else:
+            package_dict['dataset_superTheme'] = ['Sin tema']
 
-        package_dict['dataset_superTheme'] = new_themes[0]
+        #Revisa campo spatial para ver si puede guardar algún valor. Asume que si ya
+        #geojson no hay necesidad de hacer ninguna operacion con spatial_uri
+        spatial = package_dict.get("spatial", "")
+        is_geojson = False
+        if spatial:
+            try:
+                parsed = json.loads(spatial)
+                if isinstance(parsed, dict) and parsed.get("type"):
+                    is_geojson = True
+            except (ValueError, TypeError):
+                pass
+
+        if not is_geojson:
+
+            if isinstance(spatial, list):
+                candidates = [str(v).strip() for v in spatial if str(v).strip()]
+            elif spatial:
+                try:
+                    parsed = json.loads(spatial)
+                    candidates = parsed if isinstance(parsed, list) else [str(parsed).strip()]
+                except (ValueError, TypeError):
+                    candidates = [v.strip() for v in str(spatial).split(",") if v.strip()]
+            else:
+                candidates = []
+
+            province_codes = self.get_field_options("province_codes")
+            matched_uris = [province_codes[c] for c in candidates if c in province_codes]
+
+            if matched_uris:
+                package_dict["spatial_uri"] = matched_uris
+                package_dict["spatial"] = ""
+            else:
+                package_dict["spatial_uri"] = ""
+                package_dict["spatial"] = ""
+
+        #Revisa campo temporal_start para poblar temporal_end
+        temporal_start = str(package_dict.get("temporal_start", "") or "")
+        temporal_start = temporal_start.replace("Z", "+00:00")
+
+        if not temporal_start:
+            pass
+        elif "/" in temporal_start:
+            parts = temporal_start.split("/", 1)
+            package_dict['temporal_start'] = parts[0]
+            package_dict['temporal_end'] = parts[1]
+        else:
+            package_dict['temporal_start'] = temporal_start
+            if not package_dict.get('temporal_end'):
+                package_dict['temporal_end'] = temporal_start
+
+        # Si no hay campo status lo agrega
+        if not package_dict.get("dataset_status"):
+            package_dict["dataset_status"] = "http://purl.org/adms/status/Completed"
+
+        #Si no hay campo hdv Category lo agrega
+        if not package_dict.get("dataset_hvdCategory"):
+            package_dict["dataset_hvdCategory"] = "no aplica"
+
+        if not package_dict.get("dataset_issued"):
+            package_dict["dataset_issued"] = package_dict.get("metadata_created", "")
+        if not package_dict.get("dataset_modified"):
+            package_dict["dataset_modified"] = package_dict.get("metadata_modified", "")
+
+        #TODO por ahora sobreescribe siempre dataset_theme porque el tesauro esta en revisión y los
+        #valores que vengan siempre serán incorrectos
+
+        package_dict['dataset_theme'] = 'Tema específico 1'
+
+        package_dict['resources'] = [
+            self.modify_resource_dict(resource)
+            for resource in package_dict.get('resources', [])
+        ]
 
         return package_dict
 
-    #TODO: definir sta función para mapear campos de recursos
+    #TODO: revisar bien los mapeos de categoria y formato
     def modify_resource_dict(self, resource):
-            pass
+        ANDINO_V1_RESOURCE_CKAN_MAP = {
+            "id": "distribution_identifier",
+            "name": "name",
+            "description": "distribution_description",
+            "url": "distribution_download_url",
+            "format": "distribution_format",
+            "mimetype": "distribution_mediaType",
+            "resource_type": "distribution_category",
+        }
+
+        for src, dst in ANDINO_V1_RESOURCE_CKAN_MAP.items():
+            if src in resource:
+                resource[dst] = resource.pop(src)
+        prev_format = resource['distribution_format']
+        dist_format = self.get_field_options('distribution_format').get(prev_format)
+        if dist_format:
+            resource['distribution_format']=dist_format
+        else:
+            resource['distribution_format'] = 'other'
+        resource['distribution_mediaType']='other'
+        resource['distribution_category']='other'
+
+        return resource
 
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
@@ -654,6 +739,7 @@ class CKANHarvester(HarvesterBase):
                 # key.
                 resource.pop('revision_id', None)
 
+            log.error(f"esto es lo que viene CKANHarvester antes de modify: {package_dict}")
             package_dict = self.modify_package_dict(package_dict, harvest_object)
 
             result = self._create_or_update_package(

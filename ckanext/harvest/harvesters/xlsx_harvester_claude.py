@@ -10,6 +10,8 @@ import requests
 import openpyxl
 import datetime
 
+import sqlalchemy as sa
+
 from ckan import model
 from ckan.logic import ValidationError, get_action
 from ckan.plugins import toolkit
@@ -39,7 +41,7 @@ ANDINO_V1_DATASET_COLUMN_MAP = {
     "dataset_issued": "dataset_issued",
     "dataset_modified": "dataset_modified",
     "dataset_language": "dataset_language",
-    "dataset_spatial": "spatial_uri",
+    "dataset_spatial": "spatial",
     "dataset_temporal": "temporal_start",
     "dataset_landingPage": "dataset_source",
     "dataset_license": "license_id",
@@ -54,7 +56,7 @@ ANDINO_V1_RESOURCE_COLUMN_MAP = {
     "distribution_downloadURL": "distribution_download_url",
     "distribution_format": "distribution_format",
     "distribution_mediaType": "distribution_mediaType",
-    "distribution_type": "distribution_type",
+    "distribution_type": "distribution_category",
 }
 
 # -----------------------------------------------------------------------------
@@ -90,7 +92,7 @@ ANDINO_V2_RESOURCE_COLUMN_MAP = {
     "distribution_description": "distribution_description",  # dct:description
     "distribution_format": "distribution_format",  # dct:format
     "distribution_mediaType": "distribution_mediaType",  # dcat:mediaType
-    "distribution_type": "distribution_type",  # dct:type
+    "distribution_type": "distribution_category",  # dct:type
     "distribution_character_set": "distribution_character_set",  # cnt:characterEncoding
     "distribution_scale": "distribution_scale",  # escala geográfica
     "distribution_projection": "distribution_projection",  # dct:conformsTo (proyección)
@@ -425,6 +427,8 @@ class XLSXHarvesterClaude(HarvesterBase):
         # 3. Aplicar transformaciones específicas (Theme, SuperTheme, campos temporales, etc.)
         try:
             package_dict = self.modify_package_dict(package_dict, harvest_object)
+
+
         except Exception as e:
             self._save_object_error(
                 "Error en modify_package_dict: %s" % e, harvest_object, "Import"
@@ -454,16 +458,39 @@ class XLSXHarvesterClaude(HarvesterBase):
 
             if exists and exists.state != "deleted":
                 log.info("Actualizando dataset existente: %s", package_dict["name"])
+
+                # Marcar como no-current cualquier HarvestObject previo de este paquete
+                model.Session.query(HarvestObject).filter(
+                    HarvestObject.package_id == package_dict["id"]
+                ).update({"current": False})
+
+                # Setear este HarvestObject como current ANTES del update para
+                # que el hook before_dataset_index encuentre el harvest_source_id
+                harvest_object.package_id = package_dict["id"]
+                harvest_object.current = True
+                harvest_object.add()
+                model.Session.flush()
+
                 result = get_action("package_update")(context, package_dict)
             else:
                 log.info("Creando nuevo dataset: %s", package_dict["name"])
+
+                # Setear current/package_id ANTES del create para que
+                # before_dataset_index pueda vincular el dataset al harvest_source
+                # durante la indexación en SOLR.
+                harvest_object.package_id = package_dict["id"]
+                harvest_object.current = True
+                harvest_object.add()
+
+                # Diferir el FK porque el package todavía no existe en BD
+                model.Session.execute(
+                    sa.text("SET CONSTRAINTS harvest_object_package_id_fkey DEFERRED")
+                )
+                model.Session.flush()
+
                 result = get_action("package_create")(context, package_dict)
 
-            # FIX: actualizar package_id en el HarvestObject para tracking correcto
-            harvest_object.package_id = result["id"]
-            harvest_object.current = True
-            harvest_object.save()
-
+            model.Session.commit()
             return True
 
         except Exception as e:
@@ -487,83 +514,71 @@ class XLSXHarvesterClaude(HarvesterBase):
         :return: package_dict enriquecido y normalizado
         """
 
-        _BASE_TOP_URL = "http://publications.europa.eu/resource/authority/data-theme/"
-        SUPER_THEME_ACRONYM_TO_VALUE = {
-            code: _BASE_TOP_URL + code
-            for code in [
-                "TECH", "ECON", "EDUC", "SOCI", "ENER", "GOVE",
-                "JUST", "ENVI", "AGRI", "HEAL", "TRAN", "REGI", "INTR",
-            ]
-        }
-        BASE_GEO_URI = "https://infra.datos.gob.ar/vocabulario/territorio-argentina/"
-        ARG_CODES = ['AR','ARG']
-
-        SPATIAL_URIS = [BASE_GEO_URI + s for s in
-                        ["Pais/Argentina", "Region/NOA", "Region/NEA", "Region/Cuyo", "Region/Pampeana", "Region/AMBA",
-                         "Region/Patagonia", "Provincia/Buenos-Aires", "CABA/Ciudad-Autonoma-de-Buenos-Aires",
-                         "Provincia/Catamarca", "Provincia/Chaco", "Provincia/Chubut", "Provincia/Cordoba",
-                         "Provincia/Corrientes", "Provincia/Entre-Rios", "Provincia/Formosa", "Provincia/Jujuy",
-                         "Provincia/La-Pampa", "Provincia/La-Rioja", "Provincia/Mendoza", "Provincia/Misiones",
-                         "Provincia/Neuquen", "Provincia/Rio-Negro", "Provincia/Salta", "Provincia/San-Juan",
-                         "Provincia/San-Luis", "Provincia/Santa-Cruz", "Provincia/Santa-Fe",
-                         "Provincia/Santiago-del-Estero", "Provincia/Tierra-del-Fuego", "Provincia/Tucuman"]]
-
-        # 1. dataset_description
-        if not package_dict.get("dataset_description"):
-            package_dict["dataset_description"] = package_dict.get("notes", "")
-
-        # 2. dataset_status — solo se agrega si falta
+        # 2. dataset_status → solo se agrega si falta
         if not package_dict.get("dataset_status"):
             package_dict["dataset_status"] = "http://purl.org/adms/status/Completed"
 
-        # 3. dataset_hvdCategory — solo se agrega si falta
+        # 3. dataset_hvdCategory → solo se agrega si falta
         if not package_dict.get("dataset_hvdCategory"):
-            package_dict["dataset_hvdCategory"] = "categoria 1"
+            package_dict["dataset_hvdCategory"] = "no aplica"
 
-        #TODO algunos nodos ponen spatial y spatial_uri, ver qué hacer con esos casos
-        if not package_dict.get("spatial"):
-            package_dict["spatial"] = ""
-        spatial_uri = package_dict.get("spatial_uri")
-        if spatial_uri:
-            if isinstance(spatial_uri, list):
-                uri_list = spatial_uri
-            else:
+        # Revisa campo spatial para ver si puede guardar algún valor. Asume que si ya
+        # es geojson no hay necesidad de hacer ninguna operacion con spatial_uri
+        spatial = package_dict.get("spatial", "")
+        is_geojson = False
+        if spatial:
+            try:
+                parsed = json.loads(spatial)
+                if isinstance(parsed, dict) and parsed.get("type"):
+                    is_geojson = True
+            except (ValueError, TypeError):
+                pass
+
+        if not is_geojson:
+            if isinstance(spatial, list):
+                candidates = [str(v).strip() for v in spatial if str(v).strip()]
+            elif spatial:
                 try:
-                    parsed = json.loads(spatial_uri)
-                    uri_list = parsed if isinstance(parsed, list) else [str(parsed).strip()]
+                    parsed = json.loads(spatial)
+                    candidates = parsed if isinstance(parsed, list) else [str(parsed).strip()]
                 except (ValueError, TypeError):
-                    uri_list = [v.strip() for v in str(spatial_uri).split(",") if v.strip()]
+                    candidates = [v.strip() for v in str(spatial).split(",") if v.strip()]
+            else:
+                candidates = []
 
-            valid = [u for u in uri_list if u in SPATIAL_URIS]
-            package_dict["spatial_uri"] = valid if valid else ""
+            province_codes = self.get_field_options("province_codes")
+            matched_uris = [province_codes[c] for c in candidates if c in province_codes]
 
+            if matched_uris:
+                package_dict["spatial_uri"] = matched_uris
+                package_dict["spatial"] = ""
+            else:
+                package_dict["spatial_uri"] = ""
+                package_dict["spatial"] = ""
 
-        # 5. temporal_end — se deriva de temporal_start si contiene "/" (formato ISO 8601 interval)
-        if not package_dict.get("temporal_end"):
-            temporal_start = str(package_dict.get("temporal_start", "") or "")
-            if "/" in temporal_start:
-                parts = temporal_start.split("/", 1)
-                try:
-                    datetime.datetime.strptime(parts[0].strip(), "%Y-%m-%d")
-                    datetime.datetime.strptime(parts[1].strip(), "%Y-%m-%d")
-                    package_dict["temporal_start"] = parts[0].strip()
-                    package_dict["temporal_end"]   = parts[1].strip()
-                except ValueError:
-                    package_dict["temporal_start"] = ""
-                    package_dict["temporal_end"]   = ""
+        # 5. temporal_end → se deriva de temporal_start si contiene "/" (formato ISO 8601 interval)
+        temporal_start = str(package_dict.get("temporal_start", "") or "")
+        temporal_start = temporal_start.replace("Z", "+00:00")
+
+        if not temporal_start:
+            pass
+        elif "/" in temporal_start:
+            parts = temporal_start.split("/", 1)
+            package_dict['temporal_start'] = parts[0]
+            package_dict['temporal_end'] = parts[1]
+        else:
+            package_dict['temporal_start'] = temporal_start
+            if not package_dict.get('temporal_end'):
+                package_dict['temporal_end'] = temporal_start
 
         # 6. dataset_accrualPeriodicity
-        if not package_dict.get("dataset_accrualPeriodicity"):
-            package_dict["dataset_accrualPeriodicity"] = (
-                "http://publications.europa.eu/resource/authority/frequency/CONT"
-            )
-        else:
-            ap_value = package_dict["dataset_accrualPeriodicity"]
-            package_dict["dataset_accrualPeriodicity"] = (
+
+        ap_value = package_dict["dataset_accrualPeriodicity"]
+        package_dict["dataset_accrualPeriodicity"] = (
                 self.get_field_options("accrual_periodicity").get(ap_value, ap_value)
             )
 
-        # 7. dataset_superTheme — sustituir siglas por URLs; default si vacío
+        # 7. dataset_superTheme → sustituir siglas por URLs; default si vacío
         DEFAULT_SUPER_THEME = "Sin tema"
         raw_st = package_dict.get("dataset_superTheme")
 
@@ -578,16 +593,18 @@ class XLSXHarvesterClaude(HarvesterBase):
             st_list = []
 
         if st_list:
+            superthemes = self.get_field_options("superthemes")
             package_dict["dataset_superTheme"] = [
-                SUPER_THEME_ACRONYM_TO_VALUE.get(item, item)
-                for item in st_list
+                superthemes.get(item, item) for item in st_list
             ]
         else:
             package_dict["dataset_superTheme"] = [DEFAULT_SUPER_THEME]
 
-        # 8. dataset_theme — siempre se sobrescribe
+        # 8. dataset_theme → siempre se sobrescribe
         package_dict["dataset_theme"] = "Tema específico 1"
 
+
+       #TODO: esto tiene sentido para el seguimiento que queremos hacer de los datos??
         # 9. dataset_issued / dataset_modified
         if not package_dict.get("dataset_issued"):
             package_dict["dataset_issued"] = package_dict.get("metadata_created", "")
@@ -597,16 +614,16 @@ class XLSXHarvesterClaude(HarvesterBase):
         # 10. Campos faltantes en recursos/distribuciones
         DISTRIBUTION_DEFAULTS = {
             "distribution_character_set": "",
-            "distribution_scale":         "",
-            "distribution_projection":    "",
-            "distribution_iso19115_url":  "",
-            "distribution_wfs_url":       ""
+            "distribution_scale": "",
+            "distribution_projection": "",
+            "distribution_iso19115_url": "",
+            "distribution_wfs_url": ""
         }
         for resource in package_dict.get("resources", []):
             for field, default in DISTRIBUTION_DEFAULTS.items():
                 if not resource.get(field):
                     resource[field] = default
-            resource['distribution_type'] =  'http://purl.org/dc/dcmitype/Dataset'
+            resource['distribution_category'] = 'http://purl.org/dc/dcmitype/Dataset'
 
         return package_dict
 
