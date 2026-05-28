@@ -112,7 +112,7 @@ ANDINO_V1_DATASET_OPTIONAL  = set()
 ANDINO_V1_RESOURCE_OPTIONAL = set()
 
 
-class XLSXHarvesterClaude(HarvesterBase):
+class XLSXHarvester(HarvesterBase):
     """
     Harvester para archivos Excel (.xlsx) con el mismo comportamiento que
     CKANHarvester: mismas transformaciones de campos, mapeo de valores y
