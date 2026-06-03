@@ -15,11 +15,14 @@ import sqlalchemy as sa
 from ckan import model
 from ckan.logic import ValidationError, get_action
 from ckan.plugins import toolkit
+from ckan.views.user import login
 
 from ckanext.harvest.model import HarvestObject, HarvestGatherError
 from .base import HarvesterBase
 
 log = logging.getLogger(__name__)
+log_ckan = logging.getLogger("ckan.logic.action.create")
+log_ckan.setLevel(logging.DEBUG)
 
 # ---------------------------------------------------------------------------
 # Mapeo de encabezados Excel → nombre de campo interno
@@ -31,7 +34,7 @@ log = logging.getLogger(__name__)
 ANDINO_V1_DATASET_COLUMN_MAP = {
     "dataset_identifier": "id",  # PK interna CKAN
     "dataset_title": "title",
-    "dataset_description": "dataset_description",
+    "dataset_description": "notes",
     "dataset_publisher_name": "dataset_publisher_name",
     "dataset_publisher_mbox": "dataset_publisher_mbox",
     "dataset_superTheme": "dataset_superTheme",
@@ -51,12 +54,13 @@ ANDINO_V1_DATASET_COLUMN_MAP = {
 ANDINO_V1_RESOURCE_COLUMN_MAP = {
     "dataset_identifier": "id",
     "distribution_identifier": "distribution_identifier",
-    "distribution_title": "distribution_name",
-    "distribution_description": "distribution_description",
-    "distribution_downloadURL": "distribution_download_url",
-    "distribution_format": "distribution_format",
-    "distribution_mediaType": "distribution_mediaType",
-    "distribution_type": "distribution_category",
+    "distribution_title": "name",
+    "distribution_description": "description",
+    "distribution_downloadURL": "url",
+    "distribution_format": "format",
+    "distribution_mediaType": "mimetype",
+    "distribution_modified":"last_modified",
+    "distribution_issued" : "created"
 }
 
 # -----------------------------------------------------------------------------
@@ -87,17 +91,16 @@ ANDINO_V2_DATASET_COLUMN_MAP = {
 ANDINO_V2_RESOURCE_COLUMN_MAP = {
     "dataset_identifier": "id",  # FK → dataset
     "distribution_identifier": "distribution_identifier",  # identificador de la distribución
-    "distribution_download_url": "distribution_download_url",  # dcat:downloadURL
+    "distribution_download_url": "url",  # dcat:downloadURL
     "distribution_name": "name",  # dct:title del recurso ← "name" en v2
-    "distribution_description": "distribution_description",  # dct:description
-    "distribution_format": "distribution_format",  # dct:format
-    "distribution_mediaType": "distribution_mediaType",  # dcat:mediaType
-    "distribution_type": "distribution_category",  # dct:type
-    "distribution_character_set": "distribution_character_set",  # cnt:characterEncoding
-    "distribution_scale": "distribution_scale",  # escala geográfica
-    "distribution_projection": "distribution_projection",  # dct:conformsTo (proyección)
-    "distribution_iso19115_url": "distribution_iso19115_url",  # URL metadato ISO 19115
-    "distribution_wfs_url": "distribution_wfs_url",  # URL servicio WFS
+    "distribution_description": "description",  # dct:description
+    "distribution_format": "format",  # dct:format
+    "distribution_mediaType": "mediaType",  # dcat:mediaType #
+    "distribution_character_set": "character_set",  # cnt:characterEncoding
+    "distribution_scale": "scale",  # escala geográfica
+    "distribution_projection": "projection",  # dct:conformsTo (proyección)
+    "distribution_iso19115_url": "iso19115_url",  # URL metadato ISO 19115
+    "distribution_wfs_url": "wfs_url",  # URL servicio WFS
 }
 
 DEFAULT_DATASET_SHEET      = "dataset"
@@ -209,7 +212,6 @@ class XLSXHarvester(HarvesterBase):
         return self.fields_options.get(field_name, {})
 
     # ---------------------------------------------------------- gather_stage --
-
     def _validate_mapping_headers(self, workbook, sheet_name, mapping, skip=0, optional_keys=None):
         """
         Valida que los headers requeridos del mapping existan en la hoja Excel.
@@ -474,11 +476,7 @@ class XLSXHarvester(HarvesterBase):
                 result = get_action("package_update")(context, package_dict)
             else:
                 log.info("Creando nuevo dataset: %s", package_dict["name"])
-
-                # Setear current/package_id ANTES del create para que
-                # before_dataset_index pueda vincular el dataset al harvest_source
-                # durante la indexación en SOLR.
-                harvest_object.package_id = package_dict["id"]
+                harvest_object.package_id = package_dict['id']
                 harvest_object.current = True
                 harvest_object.add()
 
@@ -499,7 +497,8 @@ class XLSXHarvester(HarvesterBase):
                 harvest_object,
                 "Import",
             )
-            return False
+            #return False
+            raise e
 
     # ---------------------------------------------------- modify_package_dict --
 
@@ -603,27 +602,33 @@ class XLSXHarvester(HarvesterBase):
         # 8. dataset_theme → siempre se sobrescribe
         package_dict["dataset_theme"] = "Tema específico 1"
 
-
-       #TODO: esto tiene sentido para el seguimiento que queremos hacer de los datos??
         # 9. dataset_issued / dataset_modified
+        #Si viene vacío, busca en el base info que tenga previa en la db. Es un fallback
         if not package_dict.get("dataset_issued"):
             package_dict["dataset_issued"] = package_dict.get("metadata_created", "")
         if not package_dict.get("dataset_modified"):
             package_dict["dataset_modified"] = package_dict.get("metadata_modified", "")
+        package_dict['dataset_language'] = "http://publications.europa.eu/resource/authority/language/SPA"
 
         # 10. Campos faltantes en recursos/distribuciones
         DISTRIBUTION_DEFAULTS = {
-            "distribution_character_set": "",
-            "distribution_scale": "",
-            "distribution_projection": "",
-            "distribution_iso19115_url": "",
-            "distribution_wfs_url": ""
+            "character_set": "",
+            "scale": "",
+            "projection": "",
+            "iso19115_url": "",
+            "wfs_url": ""
         }
         for resource in package_dict.get("resources", []):
             for field, default in DISTRIBUTION_DEFAULTS.items():
                 if not resource.get(field):
                     resource[field] = default
-            resource['distribution_category'] = 'http://purl.org/dc/dcmitype/Dataset'
+
+            resource_format = resource['format'].lower()
+            resource["category"] = next(
+                (k for k, v in self.get_field_options("category_formats").items()
+                 if resource_format in v),
+                "other"
+            )
 
         return package_dict
 
@@ -696,14 +701,16 @@ class XLSXHarvester(HarvesterBase):
         if not pkg.get("title"):
             raise ValueError("El dataset no tiene título válido para CKAN")
 
-        # FIX: preservar el name existente en updates para evitar conflictos
+        # Preservar el name existente en updates para evitar conflictos.
+        # Se guarda existing_pkg para reutilizarlo en la resolución de IDs de recursos.
         existing_id = self._get_existing_package_id(harvest_object)
+        existing_pkg = None
         if existing_id:
             try:
-                existing = toolkit.get_action("package_show")(
+                existing_pkg = toolkit.get_action("package_show")(
                     {"ignore_auth": True}, {"id": existing_id}
                 )
-                pkg["name"] = existing["name"]
+                pkg["name"] = existing_pkg["name"]
             except toolkit.ObjectNotFound:
                 log.warning(
                     "Package %s ya no existe, se generará un name nuevo", existing_id
@@ -724,17 +731,42 @@ class XLSXHarvester(HarvesterBase):
                 pkg["owner_org"] = default_org
 
         # Keywords → Tags
-        if "dataset_keywords" in pkg and not pkg.get("tags"):
-            keywords_raw = pkg.pop("dataset_keywords") or ""
-            if keywords_raw:
-                pkg["tags"] = [
-                    {"name": t.strip()}
-                    for t in keywords_raw.split(",")
-                    if t.strip()
-                ]
+        #if "dataset_keywords" in pkg and not pkg.get("tags"):
+        #    keywords_raw = pkg.pop("dataset_keywords") or ""
+        #    if keywords_raw:
+        #        pkg["tags"] = [
+        #            {"name": t.strip()}
+        #            for t in keywords_raw.split(",")
+        #            if t.strip()
+        #        ]
 
         # Trazabilidad del harvest
         pkg["harvest_source_url"] = harvest_object.source.url
+
+        # ID único del dataset (se resuelve antes de los recursos para poder
+        # usarlo como semilla en el UUID5 de cada distribución)
+        raw_id = pkg.get("id", "").strip()
+        if existing_id:
+            pkg["id"] = existing_id
+        elif raw_id and self._is_valid_uuid(raw_id):
+            pkg["id"] = raw_id
+        elif raw_id:
+            seed = "%s/%s" % (pkg.get("owner_org", ""), raw_id)
+            pkg["id"] = str(uuid.uuid5(uuid.NAMESPACE_DNS, seed))
+        else:
+            pkg["id"] = str(uuid.uuid4())
+
+        if raw_id and raw_id != pkg["id"]:
+            pkg["origin_id"] = raw_id
+
+        # Índice de IDs de recursos existentes por distribution_identifier
+        # (usado para preservar el ID CKAN de la distribución en updates)
+        existing_res_by_dist_id = {}
+        if existing_pkg:
+            for r in existing_pkg.get("resources", []):
+                dist_id = r.get("distribution_identifier", "").strip()
+                if dist_id:
+                    existing_res_by_dist_id[dist_id] = r["id"]
 
         # Procesar distribuciones (_resources → resources)
         resources_raw  = pkg.pop("_resources", [])
@@ -761,6 +793,21 @@ class XLSXHarvester(HarvesterBase):
                     if val_str:
                         res[clave] = val_str
 
+            # ID único de la distribución (misma lógica que el dataset)
+            raw_dist_id = dist.get("distribution_identifier", "").strip()
+            if raw_dist_id and raw_dist_id in existing_res_by_dist_id:
+                res["id"] = existing_res_by_dist_id[raw_dist_id]
+            elif raw_dist_id and self._is_valid_uuid(raw_dist_id):
+                res["id"] = raw_dist_id
+            elif raw_dist_id:
+                seed = "%s/%s" % (pkg["id"], raw_dist_id)
+                res["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+            else:
+                res["id"] = str(uuid.uuid4())
+
+            if raw_dist_id and raw_dist_id != res["id"]:
+                res["origin_id"] = raw_dist_id
+
             resources_list.append(res)
 
         # Recurso de auxilio si no hay distribuciones válidas
@@ -772,12 +819,6 @@ class XLSXHarvester(HarvesterBase):
             }]
 
         pkg["resources"] = resources_list
-
-        # ID único consistente
-        if existing_id:
-            pkg["id"] = existing_id
-        else:
-            pkg["id"] = pkg.get("id") or str(uuid.uuid4())
 
         return pkg
 
@@ -827,6 +868,13 @@ class XLSXHarvester(HarvesterBase):
                 )
 
         return None
+
+    def _is_valid_uuid(self, value):
+        try:
+            uuid.UUID(str(value))
+            return True
+        except ValueError:
+            return False
 
     def _save_gather_error(self, message, harvest_job):
         log.error("XLSXHarvesterClaude gather error: %s", message)

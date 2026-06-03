@@ -58,9 +58,87 @@
     "90": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tucuman",
     "94": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tierra-del-Fuego"
 },
-  "distribution_formats": {
-    "ZIP": "https://www.iana.org/assignments/media-types/application/zip",
-    "CSV": "https://www.iana.org/assignments/media-types/text/csv",
-    "PDF": "https://www.iana.org/assignments/media-types/application/pdf"
-  }
+  "mimetypes" : {
+    "text/csv": "https://www.iana.org/assignments/media-types/text/csv",
+    "text/plain": "https://www.iana.org/assignments/media-types/text/plain",
+    "text/html": "https://www.iana.org/assignments/media-types/text/html",
+    "text/xml": "https://www.iana.org/assignments/media-types/text/xml",
+    "application/json": "https://www.iana.org/assignments/media-types/application/json",
+    "application/geo+json": "https://www.iana.org/assignments/media-types/application/geo+json",
+    "application/ld+json": "https://www.iana.org/assignments/media-types/application/ld+json",
+    "application/xml": "https://www.iana.org/assignments/media-types/application/xml",
+    "application/rdf+xml": "https://www.iana.org/assignments/media-types/application/rdf+xml",
+    "application/pdf": "https://www.iana.org/assignments/media-types/application/pdf",
+    "application/vnd.ms-excel": "https://www.iana.org/assignments/media-types/application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "https://www.iana.org/assignments/media-types/application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.oasis.opendocument.spreadsheet": "https://www.iana.org/assignments/media-types/application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.text": "https://www.iana.org/assignments/media-types/application/vnd.oasis.opendocument.text",
+    "application/msword": "https://www.iana.org/assignments/media-types/application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://www.iana.org/assignments/media-types/application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/zip": "https://www.iana.org/assignments/media-types/application/zip",
+    "application/gzip": "https://www.iana.org/assignments/media-types/application/gzip",
+    "application/octet-stream": "https://www.iana.org/assignments/media-types/application/octet-stream",
+    "application/vnd.google-earth.kml+xml": "https://www.iana.org/assignments/media-types/application/vnd.google-earth.kml+xml",
+    "application/gml+xml": "https://www.iana.org/assignments/media-types/application/gml+xml",
+    "image/png": "https://www.iana.org/assignments/media-types/image/png",
+    "image/jpeg": "https://www.iana.org/assignments/media-types/image/jpeg",
+    "image/tiff": "https://www.iana.org/assignments/media-types/image/tiff",
+    "application/sparql-results+json": "https://www.iana.org/assignments/media-types/application/sparql-results+json"
+},
+  "category_formats": {
+    "http://purl.org/dc/dcmitype/Dataset": [
+        "csv", "tsv", "xlsx", "xls", "ods",
+        "json", "jsonl", "xml", "parquet", "avro",
+        "db", "sqlite", "dta", "sav", "rds"
+    ],
+    "http://purl.org/dc/dcmitype/Text": [
+        ".pdf", ".docx", ".doc", ".odt", ".txt",
+        ".rtf", ".md", ".html", ".htm", ".epub"
+    ],
+    "http://purl.org/dc/dcmitype/Image": [
+        ".png", ".jpg", ".jpeg", ".tiff", ".tif",
+        ".webp", ".bmp", ".gif", ".svg", ".heic",
+        ".raw", ".psd"
+    ],
+    "http://purl.org/dc/dcmitype/StillImage": [
+        ".png", ".jpg", ".jpeg", ".tiff", ".tif",
+        ".webp", ".bmp", ".svg", ".heic"
+    ],
+    "http://purl.org/dc/dcmitype/MovingImage": [
+        ".mp4", ".mov", ".avi", ".mkv", ".webm",
+        ".ogv", ".flv", ".wmv"
+    ],
+    "http://purl.org/dc/dcmitype/Sound": [
+        ".mp3", ".wav", ".ogg", ".flac", ".aac",
+        ".m4a", ".opus"
+    ],
+    "http://purl.org/dc/dcmitype/Software": [
+        ".exe", ".msi", ".deb", ".rpm", ".apk",
+        ".dmg", ".jar", ".whl", ".zip", ".tar.gz"
+    ],
+    "http://purl.org/dc/dcmitype/InteractiveResource": [
+        ".html", ".htm", ".js", ".jsx", ".ipynb",
+        ".rmd"
+    ],
+    "http://purl.org/dc/dcmitype/Collection": [
+        ".zip", ".tar.gz", ".7z", ".rar"
+    ],
+    "http://purl.org/dc/dcmitype/Dataset#geographic": [
+        ".shp", ".geojson", ".gpkg", ".kml", ".kmz",
+        ".gml", ".topojson", ".gpx", ".nc",
+        ".tif",  "GeoTIFF"
+    ],
+    "http://www.w3.org/2004/02/skos/core#ConceptScheme": [
+        ".rdf", ".ttl", ".n3", ".nt", ".xml", ".jsonld"
+    ],
+    "http://www.w3.org/2002/07/owl#Ontology": [
+        ".owl", ".rdf", ".ttl", ".n3", ".jsonld", ".obo"
+    ],
+    "http://purl.org/dc/dcmitype/Text#documentation": [
+        ".pdf", ".docx", ".md", ".html", ".txt", ".odt"
+    ],
+    "http://www.w3.org/ns/adms#AssetDistribution": [
+        ".rdf", ".ttl", ".n3", ".owl", ".jsonld", ".xml"],
+    "other": []
+}
 }

@@ -342,38 +342,48 @@ class CKANHarvester(HarvesterBase):
 
         package_dict['dataset_theme'] = 'Tema específico 1'
 
+        log.error(f"Estos son los recursos antes de ser modificados: {package_dict['resources']}")
         package_dict['resources'] = [
             self.modify_resource_dict(resource)
             for resource in package_dict.get('resources', [])
         ]
+        log.error(f"Estos son los recursos después de ser modificados: {package_dict['resources']}")
 
         return package_dict
 
-    #TODO: revisar bien los mapeos de categoria y formato
+
     def modify_resource_dict(self, resource):
-        ANDINO_V1_RESOURCE_CKAN_MAP = {
-            "id": "distribution_identifier",
-            "name": "name",
-            "description": "distribution_description",
-            "url": "distribution_download_url",
-            "format": "distribution_format",
-            "mimetype": "distribution_mediaType",
-            "resource_type": "distribution_category",
+        clean_resource = {
+            "id": resource.get("id", ""),
+            "name": resource.get("name", ""),
+            "url": resource.get("url", ""),
+            "description": resource.get("description", ""),
+            "format": resource.get("format", ""),
+            "mimetype": resource.get("mimetype", "") or resource.get("mediaType", ""),
+            "character_set": "",
+            "scale": "",
+            "projection": "",
+            "iso19115_url": "",
+            "wsf_url": "",
+            "last_modified": resource.get("modified", "") or resource.get("last_modified", ""),
+            "created": resource.get("created","") or resource.get("issued","")
         }
 
-        for src, dst in ANDINO_V1_RESOURCE_CKAN_MAP.items():
-            if src in resource:
-                resource[dst] = resource.pop(src)
-        prev_format = resource['distribution_format']
-        dist_format = self.get_field_options('distribution_format').get(prev_format)
-        if dist_format:
-            resource['distribution_format']=dist_format
-        else:
-            resource['distribution_format'] = 'other'
-        resource['distribution_mediaType']='other'
-        resource['distribution_category']='other'
+        # Resolver mediaType
+        media_type = clean_resource["mimetype"]
+        clean_resource["mimetype"] = (
+                self.get_field_options("mimetypes").get(media_type) or "other"
+        )
 
-        return resource
+        # Resolver category
+        resource_format = clean_resource["format"]
+        clean_resource["category"] = next(
+            (k for k, v in self.get_field_options("category_formats").items()
+             if resource_format in v),
+            "other"
+        )
+
+        return clean_resource
 
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
