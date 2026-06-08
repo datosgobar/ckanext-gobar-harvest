@@ -1,8 +1,4 @@
 from __future__ import absolute_import
-
-import os
-from typing import Any
-
 import requests
 from requests.exceptions import HTTPError, RequestException
 
@@ -29,27 +25,6 @@ class CKANHarvester(HarvesterBase):
 
     api_version = 2
     action_api_version = 3
-
-    @property
-    def fields_options(self):
-        if not hasattr(self,'_field_options'):
-            self._field_options = None
-        if self._field_options:
-            return self._field_options
-
-        path = os.path.join(os.path.dirname(__file__), '../assets/fields_options.json')
-
-        try:
-            with open(path, 'r') as f:
-                self._field_options = json.load(f)
-        except Exception as e:
-            log.warning(f"Error cargando field_options.json en {path}: {str(e)}")
-            self._field_options = {}
-
-        return self._field_options
-
-    def get_field_options(self, field_name):
-        return self.fields_options.get(field_name, {})
 
     def _get_action_api_offset(self):
         return '/api/%d/action' % self.action_api_version
@@ -204,186 +179,7 @@ class CKANHarvester(HarvesterBase):
             Allows custom harvesters to modify the package dict before
             creating or updating the actual package.
         '''
-
-        #Mapeo de campos que no están en extras
-
-        ANDINO_V1_DATASET_CKAN_MAP = {
-            "notes": "dataset_description",
-            "author": "dataset_publisher_name",
-            "author_email": "dataset_publisher_mbox",
-        }
-
-        for src, dst in ANDINO_V1_DATASET_CKAN_MAP.items():
-            if src in package_dict:
-                package_dict[dst] = package_dict.pop(src)
-
-        EXTRAS_TO_FIELDS = {
-            'accrualPeriodicity': 'dataset_accrualPeriodicity',
-            'superTheme':         'dataset_superTheme',
-            'modified':           'dataset_modified',
-            'Modificado':         'dataset_modified',
-            'Publicado':          'dataset_issued',
-            'spatial':            'dataset_spatial',
-            'language':           'dataset_language',
-            'temporal':           'temporal_start'
-        }
-        SCHEMA_COLLISION_KEYS = {
-            'modified',  # collides → 'There is a schema field with the same name'
-            'Modificado',
-            'spatial',
-            'temporal'
-        }
-        # --- 1. Promote extras to top-level fields ---
-        remaining_extras = []
-        for extra in package_dict.get('extras', []):
-            key = extra.get('key', '')
-            value = extra.get('value', '')
-
-            if key in EXTRAS_TO_FIELDS:
-                field_name = EXTRAS_TO_FIELDS[key]
-                if not package_dict.get(field_name):
-                    package_dict[field_name] = value
-            elif key in SCHEMA_COLLISION_KEYS:
-                pass
-            else:
-                remaining_extras.append(extra)
-        package_dict['extras'] = remaining_extras
-
-        # --- 2. Agregar y transformar campos si corresponde ---
-
-        #Pasa accrualPeriodicity de valores permitidos viejos a valores permitidos nuevos (en caso de tener valores viejos)
-        ap_value = package_dict.get('dataset_accrualPeriodicity')
-        if ap_value:
-          package_dict['dataset_accrualPeriodicity'] = self.get_field_options("accrual_periodicity").get(ap_value, ap_value)
-        else:
-          package_dict['dataset_accrualPeriodicity']= "http://publications.europa.eu/resource/authority/frequency/IRREG"
-
-        #Pasa dataset_superTheme de valores permitidos viejos a valores permitidos nuevos (en caso de tener valores viejos)
-        st_value = package_dict.get('dataset_superTheme')
-        if st_value:
-            try:
-                st_list = json.loads(st_value) if isinstance(st_value, str) else st_value
-                log.error(f"esto es lo que saca de supertheme{st_list}")
-            except (ValueError, TypeError):
-                st_list = [st_value]
-
-            superthemes = self.get_field_options("superthemes")
-            package_dict['dataset_superTheme'] = [
-                superthemes.get(element, element) for element in st_list
-            ]
-        else:
-            package_dict['dataset_superTheme'] = ['Sin tema']
-
-        #Revisa campo spatial para ver si puede guardar algún valor. Asume que si ya
-        #geojson no hay necesidad de hacer ninguna operacion con spatial_uri
-        spatial = package_dict.get("spatial", "")
-        is_geojson = False
-        if spatial:
-            try:
-                parsed = json.loads(spatial)
-                if isinstance(parsed, dict) and parsed.get("type"):
-                    is_geojson = True
-            except (ValueError, TypeError):
-                pass
-
-        if not is_geojson:
-
-            if isinstance(spatial, list):
-                candidates = [str(v).strip() for v in spatial if str(v).strip()]
-            elif spatial:
-                try:
-                    parsed = json.loads(spatial)
-                    candidates = parsed if isinstance(parsed, list) else [str(parsed).strip()]
-                except (ValueError, TypeError):
-                    candidates = [v.strip() for v in str(spatial).split(",") if v.strip()]
-            else:
-                candidates = []
-
-            province_codes = self.get_field_options("province_codes")
-            matched_uris = [province_codes[c] for c in candidates if c in province_codes]
-
-            if matched_uris:
-                package_dict["spatial_uri"] = matched_uris
-                package_dict["spatial"] = ""
-            else:
-                package_dict["spatial_uri"] = ""
-                package_dict["spatial"] = ""
-
-        #Revisa campo temporal_start para poblar temporal_end
-        temporal_start = str(package_dict.get("temporal_start", "") or "")
-        temporal_start = temporal_start.replace("Z", "+00:00")
-
-        if not temporal_start:
-            pass
-        elif "/" in temporal_start:
-            parts = temporal_start.split("/", 1)
-            package_dict['temporal_start'] = parts[0]
-            package_dict['temporal_end'] = parts[1]
-        else:
-            package_dict['temporal_start'] = temporal_start
-            if not package_dict.get('temporal_end'):
-                package_dict['temporal_end'] = temporal_start
-
-        # Si no hay campo status lo agrega
-        if not package_dict.get("dataset_status"):
-            package_dict["dataset_status"] = "http://purl.org/adms/status/Completed"
-
-        #Si no hay campo hdv Category lo agrega
-        if not package_dict.get("dataset_hvdCategory"):
-            package_dict["dataset_hvdCategory"] = "no aplica"
-
-        if not package_dict.get("dataset_issued"):
-            package_dict["dataset_issued"] = package_dict.get("metadata_created", "")
-        if not package_dict.get("dataset_modified"):
-            package_dict["dataset_modified"] = package_dict.get("metadata_modified", "")
-
-        #TODO por ahora sobreescribe siempre dataset_theme porque el tesauro esta en revisión y los
-        #valores que vengan siempre serán incorrectos
-
-        package_dict['dataset_theme'] = 'Tema específico 1'
-
-        log.error(f"Estos son los recursos antes de ser modificados: {package_dict['resources']}")
-        package_dict['resources'] = [
-            self.modify_resource_dict(resource)
-            for resource in package_dict.get('resources', [])
-        ]
-        log.error(f"Estos son los recursos después de ser modificados: {package_dict['resources']}")
-
         return package_dict
-
-
-    def modify_resource_dict(self, resource):
-        clean_resource = {
-            "id": resource.get("id", ""),
-            "name": resource.get("name", ""),
-            "url": resource.get("url", ""),
-            "description": resource.get("description", ""),
-            "format": resource.get("format", ""),
-            "mimetype": resource.get("mimetype", "") or resource.get("mediaType", ""),
-            "character_set": "",
-            "scale": "",
-            "projection": "",
-            "iso19115_url": "",
-            "wsf_url": "",
-            "last_modified": resource.get("modified", "") or resource.get("last_modified", ""),
-            "created": resource.get("created","") or resource.get("issued","")
-        }
-
-        # Resolver mediaType
-        media_type = clean_resource["mimetype"]
-        clean_resource["mimetype"] = (
-                self.get_field_options("mimetypes").get(media_type) or "other"
-        )
-
-        # Resolver category
-        resource_format = clean_resource["format"]
-        clean_resource["category"] = next(
-            (k for k, v in self.get_field_options("category_formats").items()
-             if resource_format in v),
-            "other"
-        )
-
-        return clean_resource
 
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
@@ -749,7 +545,6 @@ class CKANHarvester(HarvesterBase):
                 # key.
                 resource.pop('revision_id', None)
 
-            log.error(f"esto es lo que viene CKANHarvester antes de modify: {package_dict}")
             package_dict = self.modify_package_dict(package_dict, harvest_object)
 
             result = self._create_or_update_package(

@@ -509,7 +509,7 @@ def _configure_db_logger(config):
     parent_logger = 'ckanext.harvest'
     children = ['plugin', 'model', 'logic.action.create', 'logic.action.delete',
                 'logic.action.get',  'logic.action.patch', 'logic.action.update',
-                'logic.validators', 'harvesters.base', 'harvesters.ckanharvester']
+                'logic.validators', 'harvesters.base', 'harvesters.ckanharvester', 'harvesters.gobar_ckanharvester']
 
     children_ = {0: children, 1: children[1:], 2: children[1:-2],
                  3: children[1:-3], 4: children[2:-3], 5: children[1:2],

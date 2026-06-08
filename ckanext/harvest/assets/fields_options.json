@@ -1,21 +1,4 @@
 {
-  "accrual_periodicity": {
-    "R/PT1S": "http://publications.europa.eu/resource/authority/frequency/CONT",
-    "R/PT1H": "http://publications.europa.eu/resource/authority/frequency/HOURLY",
-    "R/P1D": "http://publications.europa.eu/resource/authority/frequency/DAILY",
-    "R/P1W": "http://publications.europa.eu/resource/authority/frequency/WEEKLY",
-    "R/P0.5M": "http://publications.europa.eu/resource/authority/frequency/BIWEEKLY",
-    "R/P1M": "http://publications.europa.eu/resource/authority/frequency/MONTHLY",
-    "R/P2M": "http://publications.europa.eu/resource/authority/frequency/BIMONTHLY",
-    "R/P3M": "http://publications.europa.eu/resource/authority/frequency/QUARTERLY",
-    "R/P4M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_3",
-    "R/P6M": "http://publications.europa.eu/resource/authority/frequency/ANNUAL_2",
-    "R/P1Y": "http://publications.europa.eu/resource/authority/frequency/ANNUAL",
-    "R/P2Y": "http://publications.europa.eu/resource/authority/frequency/BIENNIAL",
-    "R/P4Y": "http://publications.europa.eu/resource/authority/frequency/QUADRENNIAL",
-    "R/P10Y": "http://publications.europa.eu/resource/authority/frequency/DECENNIAL",
-    "eventual": "http://publications.europa.eu/resource/authority/frequency/IRREG"
-  },
   "superthemes": {
     "TECH": "http://publications.europa.eu/resource/authority/data-theme/TECH",
     "ECON": "http://publications.europa.eu/resource/authority/data-theme/ECON",
@@ -92,53 +75,83 @@
         "db", "sqlite", "dta", "sav", "rds"
     ],
     "http://purl.org/dc/dcmitype/Text": [
-        ".pdf", ".docx", ".doc", ".odt", ".txt",
-        ".rtf", ".md", ".html", ".htm", ".epub"
+        "pdf", "docx", "doc", "odt", "txt",
+        "rtf", "md", "html", "htm", "epub"
     ],
     "http://purl.org/dc/dcmitype/Image": [
-        ".png", ".jpg", ".jpeg", ".tiff", ".tif",
-        ".webp", ".bmp", ".gif", ".svg", ".heic",
-        ".raw", ".psd"
+        "png", "jpg", "jpeg", "tiff", "tif",
+        "webp", "bmp", "gif", "svg", "heic",
+        "raw", "psd"
     ],
     "http://purl.org/dc/dcmitype/StillImage": [
-        ".png", ".jpg", ".jpeg", ".tiff", ".tif",
-        ".webp", ".bmp", ".svg", ".heic"
+        "png", "jpg", "jpeg", "tiff", "tif",
+        "webp", "bmp", "svg", "heic"
     ],
     "http://purl.org/dc/dcmitype/MovingImage": [
-        ".mp4", ".mov", ".avi", ".mkv", ".webm",
-        ".ogv", ".flv", ".wmv"
+        "mp4", "mov", "avi", "mkv", "webm",
+        "ogv", "flv", "wmv"
     ],
     "http://purl.org/dc/dcmitype/Sound": [
-        ".mp3", ".wav", ".ogg", ".flac", ".aac",
-        ".m4a", ".opus"
+        "mp3", "wav", "ogg", "flac", "aac",
+        "m4a", "opus"
     ],
     "http://purl.org/dc/dcmitype/Software": [
-        ".exe", ".msi", ".deb", ".rpm", ".apk",
-        ".dmg", ".jar", ".whl", ".zip", ".tar.gz"
+        "exe", "msi", "deb", "rpm", "apk", "jar", "whl", "tar.gz"
     ],
     "http://purl.org/dc/dcmitype/InteractiveResource": [
-        ".html", ".htm", ".js", ".jsx", ".ipynb",
-        ".rmd"
+        "html", "htm", "js", "jsx", "ipynb",
+        "rmd"
     ],
     "http://purl.org/dc/dcmitype/Collection": [
-        ".zip", ".tar.gz", ".7z", ".rar"
+        "zip", "tar.gz", "7z", "rar"
     ],
     "http://purl.org/dc/dcmitype/Dataset#geographic": [
-        ".shp", ".geojson", ".gpkg", ".kml", ".kmz",
-        ".gml", ".topojson", ".gpx", ".nc",
-        ".tif",  "GeoTIFF"
+        "shp", "geojson", "gpkg", "kml", "kmz",
+        "gml", "topojson", "gpx", "nc",
+        "tif", "geotiff"
     ],
     "http://www.w3.org/2004/02/skos/core#ConceptScheme": [
-        ".rdf", ".ttl", ".n3", ".nt", ".xml", ".jsonld"
+        "rdf", "ttl", "n3", "nt", "xml", "jsonld"
     ],
     "http://www.w3.org/2002/07/owl#Ontology": [
-        ".owl", ".rdf", ".ttl", ".n3", ".jsonld", ".obo"
+        "owl", "rdf", "ttl", "n3", "jsonld", "obo"
     ],
     "http://purl.org/dc/dcmitype/Text#documentation": [
-        ".pdf", ".docx", ".md", ".html", ".txt", ".odt"
+        "pdf", "docx", "md", "html", "txt", "odt"
     ],
     "http://www.w3.org/ns/adms#AssetDistribution": [
-        ".rdf", ".ttl", ".n3", ".owl", ".jsonld", ".xml"],
+        "rdf", "ttl", "n3", "owl", "jsonld", "xml"],
     "other": []
-}
+  },
+  "format_to_mediatype": {
+    "csv":    "text/csv",
+    "tsv":    "text/csv",
+    "txt":    "text/plain",
+    "html":   "text/html",
+    "htm":    "text/html",
+    "xml":    "application/xml",
+    "json":   "application/json",
+    "jsonl":  "application/json",
+    "geojson":"application/geo+json",
+    "jsonld": "application/ld+json",
+    "rdf":    "application/rdf+xml",
+    "pdf":    "application/pdf",
+    "xls":    "application/vnd.ms-excel",
+    "xlsx":   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ods":    "application/vnd.oasis.opendocument.spreadsheet",
+    "odt":    "application/vnd.oasis.opendocument.text",
+    "doc":    "application/msword",
+    "docx":   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "zip":    "application/zip",
+    "gz":     "application/gzip",
+    "gzip":   "application/gzip",
+    "kml":    "application/vnd.google-earth.kml+xml",
+    "kmz":    "application/vnd.google-earth.kml+xml",
+    "gml":    "application/gml+xml",
+    "png":    "image/png",
+    "jpg":    "image/jpeg",
+    "jpeg":   "image/jpeg",
+    "tiff":   "image/tiff",
+    "tif":    "image/tiff"
+  }
 }

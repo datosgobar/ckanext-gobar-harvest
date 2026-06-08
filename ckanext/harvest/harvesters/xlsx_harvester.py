@@ -24,15 +24,12 @@ log = logging.getLogger(__name__)
 log_ckan = logging.getLogger("ckan.logic.action.create")
 log_ckan.setLevel(logging.DEBUG)
 
-# ---------------------------------------------------------------------------
-# Mapeo de encabezados Excel → nombre de campo interno
-# ---------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Mapeo del perfil previo de metadatos versión excel a campos ckan nuevos
 # -----------------------------------------------------------------------------
 ANDINO_V1_DATASET_COLUMN_MAP = {
-    "dataset_identifier": "id",  # PK interna CKAN
+    "dataset_identifier": "id",
     "dataset_title": "title",
     "dataset_description": "notes",
     "dataset_publisher_name": "dataset_publisher_name",
@@ -46,7 +43,6 @@ ANDINO_V1_DATASET_COLUMN_MAP = {
     "dataset_language": "dataset_language",
     "dataset_spatial": "spatial",
     "dataset_temporal": "temporal_start",
-    "dataset_landingPage": "dataset_source",
     "dataset_license": "license_id",
     "dataset_source": "dataset_source",
 }
@@ -71,7 +67,7 @@ ANDINO_V2_DATASET_COLUMN_MAP = {
     "dataset_title": "title",
     "dataset_publisher_name": "dataset_publisher_name",
     "dataset_publisher_mbox": "dataset_publisher_mbox",
-    "dataset_description": "dataset_description",
+    "dataset_description": "notes",
     "dataset_issued": "dataset_issued",
     "dataset_modified": "dataset_modified",
     "dataset_status": "dataset_status",
@@ -117,13 +113,19 @@ ANDINO_V1_RESOURCE_OPTIONAL = set()
 
 class XLSXHarvester(HarvesterBase):
     """
-    Harvester para archivos Excel (.xlsx) con el mismo comportamiento que
-    CKANHarvester: mismas transformaciones de campos, mapeo de valores y
-    defaults via modify_package_dict().
+    Harvester para archivos Excel (.xlsx) con el perfil de metadatos datos.gob.ar.
+
+    Implementa las tres etapas del ciclo de harvest de CKAN (gather, fetch, import)
+    para fuentes XLSX. Soporta dos versiones del perfil de metadatos:
+      - V2 (preferido): columnas con nombres del perfil actual (dataset_description,
+        distribution_download_url, etc.)
+      - V1 (fallback): columnas del perfil legacy de Andino
 
     Estructura esperada del archivo:
-      - Pestaña "dataset"      : una fila por dataset; encabezados = display_property DCAT-AP
-      - Pestaña "distribution" : una fila por recurso; incluye dataset_identifier (FK)
+      - Pestaña "dataset"      : una fila por dataset; encabezados según el perfil activo
+      - Pestaña "distribution" : una fila por distribución; incluye dataset_identifier (FK)
+
+    El harvester intenta primero el mapeo V2 y cae a V1 si los headers no coinciden.
 
     Configuración opcional (JSON en el campo "Configuration" del formulario):
     {
@@ -146,9 +148,10 @@ class XLSXHarvester(HarvesterBase):
     # ------------------------------------------------------------------ info --
 
     def info(self):
+        """Retorna los metadatos de registro del harvester para CKAN (nombre, título, descripción)."""
         return {
-            "name": "xlsx_claude",
-            "title": "XLSX (Claude)",
+            "name": "xlsx_harvester",
+            "title": "XLSX",
             "description": (
                 "Harvests remote XLSX files following the datos.gob.ar DCAT-AP schema. "
                 "Applies the same field transformations as the CKAN harvester. "
@@ -160,6 +163,16 @@ class XLSXHarvester(HarvesterBase):
     # --------------------------------------------------------- validate_config --
 
     def validate_config(self, config_str):
+        """
+        Valida el JSON de configuración del harvest source.
+
+        Verifica tipos de cada clave conocida: dataset_sheet, distribution_sheet,
+        default_owner_org y user_agent deben ser strings; skip_rows debe ser entero;
+        default_tags debe ser lista de dicts; default_extras debe ser dict; y
+        read_only, force_all, override_extras deben ser booleanos.
+        Lanza ValueError ante cualquier violación de tipo o JSON inválido.
+        Retorna config_str sin modificar si todo es válido.
+        """
         if not config_str:
             return config_str
         try:
@@ -188,6 +201,7 @@ class XLSXHarvester(HarvesterBase):
     # ------------------------------------------------------ get_original_url --
 
     def get_original_url(self, harvest_object_id):
+        """Retorna la URL del harvest source asociado al harvest_object_id dado, o None si no existe."""
         obj = HarvestObject.get(harvest_object_id)
         return obj.source.url if obj else None
 
@@ -195,6 +209,14 @@ class XLSXHarvester(HarvesterBase):
 
     @property
     def fields_options(self):
+        """
+        Carga y cachea el archivo assets/fields_options.json.
+
+        El JSON contiene los diccionarios de traducción de valores controlados:
+        superthemes, province_codes, mimetypes y category_formats.
+        Se lee una sola vez y se guarda en _field_options. Retorna {} si el
+        archivo no existe o no puede parsearse.
+        """
         if not hasattr(self, "_field_options"):
             self._field_options = None
         if self._field_options:
@@ -209,16 +231,18 @@ class XLSXHarvester(HarvesterBase):
         return self._field_options
 
     def get_field_options(self, field_name):
+        """Retorna el dict de opciones para field_name desde fields_options.json, o {} si no existe."""
         return self.fields_options.get(field_name, {})
 
     # ---------------------------------------------------------- gather_stage --
     def _validate_mapping_headers(self, workbook, sheet_name, mapping, skip=0, optional_keys=None):
         """
-        Valida que los headers requeridos del mapping existan en la hoja Excel.
-        Los headers en optional_keys se ignoran si no están presentes.
+        Valida que los headers requeridos del mapping estén presentes en la hoja Excel.
 
-        Para V2 (optional_keys=None) la validación es estricta.
-        Para V1 se puede pasar un set de keys opcionales.
+        Lee la fila de encabezados (respetando skip), normaliza a lowercase y
+        compara contra las claves del mapping. Las claves en optional_keys se excluyen
+        de la verificación. Lanza ValueError si la hoja no existe o si faltan columnas
+        requeridas, listando cuáles son.
         """
         optional_keys = {k.lower() for k in (optional_keys or set())}
 
@@ -256,7 +280,21 @@ class XLSXHarvester(HarvesterBase):
             )
 
     def gather_stage(self, harvest_job):
-        log.info("XLSXHarvesterClaude gather_stage: %s", harvest_job.source.url)
+        """
+        Descarga el XLSX, lo parsea y crea un HarvestObject por cada dataset.
+
+        Flujo:
+        1. Descarga el archivo desde harvest_job.source.url.
+        2. Intenta leer con el mapeo V2 y, si falla, con V1; aborta si ninguno es válido.
+        3. Agrupa las filas de distribuciones por dataset_identifier (FK).
+        4. Por cada fila de dataset: valida campos requeridos, genera un GUID estable
+           (url_fuente/dataset_identifier o MD5 como fallback), descarta duplicados,
+           adjunta la lista de distribuciones en _resources y persiste el HarvestObject
+           con el contenido serializado como JSON.
+        5. Marca como no-current los GUIDs del run anterior que ya no aparecen en el Excel.
+        Retorna la lista de IDs de HarvestObjects creados.
+        """
+        log.info("XLSXHarvester gather_stage: %s", harvest_job.source.url)
 
         self._set_config(harvest_job.source.config)
         source_url = harvest_job.source.url.strip()
@@ -356,7 +394,7 @@ class XLSXHarvester(HarvesterBase):
             seen_guids.add(guid)
             row["_resources"] = dist_by_dataset.get(ds_id, [])
 
-            content = json.dumps(row, default=str)
+            content = json.dumps(row, default=str, sort_keys=True)
 
             obj = HarvestObject(
                 guid=guid,
@@ -371,7 +409,7 @@ class XLSXHarvester(HarvesterBase):
         deleted_guids = previous_guids - seen_guids
         if deleted_guids:
             log.info(
-                "XLSXHarvesterClaude: %d datasets ya no están en el Excel y serán marcados como no-current",
+                "XLSXHarvester: %d datasets ya no están en el Excel y serán marcados como no-current",
                 len(deleted_guids),
             )
             model.Session.query(HarvestObject).filter(
@@ -380,13 +418,19 @@ class XLSXHarvester(HarvesterBase):
             ).update({"current": False}, synchronize_session=False)
             model.Session.commit()
 
-        log.info("XLSXHarvesterClaude: %d datasets recolectados", len(object_ids))
+        log.info("XLSXHarvester: %d datasets recolectados", len(object_ids))
         return object_ids
 
     # ----------------------------------------------------------- fetch_stage --
 
     def fetch_stage(self, harvest_object):
-        # El contenido ya fue serializado en gather_stage; no hay nada que descargar.
+        """
+        Verifica que el HarvestObject tenga contenido serializado.
+
+        El contenido ya fue embebido como JSON durante gather_stage, por lo que
+        no se realiza ninguna descarga. Retorna True si content está presente,
+        False (con error registrado) si está vacío.
+        """
         if not harvest_object.content:
             self._save_object_error(
                 "El harvest object no tiene contenido", harvest_object, "Fetch"
@@ -397,7 +441,23 @@ class XLSXHarvester(HarvesterBase):
     # ---------------------------------------------------------- import_stage --
 
     def import_stage(self, harvest_object):
-        log.debug("XLSXHarvesterClaude import_stage: %s", harvest_object.id)
+        """
+        Persiste el dataset en CKAN a partir del contenido del HarvestObject.
+
+        Flujo:
+        1. Deserializa el JSON almacenado en harvest_object.content.
+        2. Llama a _build_package_dict para construir los campos core de CKAN
+           (id, name, owner_org, resources, etc.).
+        3. Llama a modify_package_dict para aplicar transformaciones de dominio
+           (superTheme, accrualPeriodicity, temporal, spatial, etc.).
+        4. Inyecta los default_tags de la configuración si no están ya presentes.
+        5. Si el package ya existe y no está borrado, ejecuta package_update
+           marcando primero el HarvestObject previo como no-current; si no existe,
+           ejecuta package_create difiriendo la FK harvest_object_package_id_fkey
+           para evitar conflictos de orden de inserción.
+        Retorna True si la operación fue exitosa, lanza la excepción en caso contrario.
+        """
+        log.debug("XLSXHarvester import_stage: %s", harvest_object.id)
 
         if not harvest_object.content:
             self._save_object_error(
@@ -459,6 +519,32 @@ class XLSXHarvester(HarvesterBase):
             exists = model.Package.get(package_dict["id"])
 
             if exists and exists.state != "deleted":
+                # Comparar contenido con el HarvestObject previo para evitar
+                # actualizar si los metadatos no cambiaron
+                prev_object = (
+                    model.Session.query(HarvestObject)
+                    .filter(
+                        HarvestObject.guid == harvest_object.guid,
+                        HarvestObject.current == True,  # noqa: E712
+                        HarvestObject.id != harvest_object.id,
+                    )
+                    .first()
+                )
+                if prev_object and prev_object.content == harvest_object.content:
+                    log.info(
+                        "Sin cambios en dataset %s, saltando actualización",
+                        package_dict["name"],
+                    )
+                    harvest_object.package_id = package_dict["id"]
+                    harvest_object.current = True
+                    harvest_object.add()
+                    model.Session.query(HarvestObject).filter(
+                        HarvestObject.package_id == package_dict["id"],
+                        HarvestObject.id != harvest_object.id,
+                    ).update({"current": False})
+                    model.Session.commit()
+                    return 'unchanged'
+
                 log.info("Actualizando dataset existente: %s", package_dict["name"])
 
                 # Marcar como no-current cualquier HarvestObject previo de este paquete
@@ -492,25 +578,38 @@ class XLSXHarvester(HarvesterBase):
             return True
 
         except Exception as e:
+            model.Session.rollback()
             self._save_object_error(
                 "Error al guardar en CKAN (Acción API): %s" % str(e),
                 harvest_object,
                 "Import",
             )
-            #return False
             raise e
 
     # ---------------------------------------------------- modify_package_dict --
 
     def modify_package_dict(self, package_dict, harvest_object):
         """
-        Aplica transformaciones y valores por defecto al package_dict para
-        alinearlo con el perfil de metadatos V2.
+        Aplica transformaciones de dominio al package_dict para alinearlo con el perfil V2.
 
-        :param package_dict: dict con campos básicos de CKAN ya incorporados
-                             (viene de _build_package_dict)
-        :param harvest_object: objeto HarvestObject en curso
-        :return: package_dict enriquecido y normalizado
+        Transformaciones en orden:
+        - dataset_status: asigna "Completed" (ADMS) si está vacío.
+        - dataset_hvdCategory: asigna "no aplica" si está vacío.
+        - spatial: si el valor no es GeoJSON válido, intenta interpretar los candidatos como
+          códigos de provincia y los traduce a URIs vía province_codes; deja spatial_uri con
+          la lista de URIs y vacía spatial. Si no hay coincidencias, vacía ambos campos.
+        - temporal_start: normaliza el sufijo "Z" a "+00:00". Si contiene "/" (intervalo ISO 8601),
+          lo parte en temporal_start y temporal_end. Si no hay temporal_end, lo iguala a temporal_start.
+        - dataset_accrualPeriodicity: se preserva el valor tal como viene, sin mapeo.
+        - dataset_superTheme: parsea string CSV o array JSON, mapea siglas a URLs vía superthemes;
+          asigna ["Sin tema"] si el resultado es vacío.
+        - dataset_theme: sobreescribe siempre con "Tema específico 1".
+        - dataset_issued / dataset_modified: si están vacíos, los toma de metadata_created /
+          metadata_modified del paquete existente en CKAN.
+        - dataset_language: asigna siempre la URI del español (EU Publications Office).
+        - resources: por cada distribución, rellena con "" los campos opcionales faltantes
+          (character_set, scale, projection, iso19115_url, wfs_url) y calcula category
+          mapeando el format contra category_formats.
         """
 
         # 2. dataset_status → solo se agrega si falta
@@ -570,12 +669,9 @@ class XLSXHarvester(HarvesterBase):
             if not package_dict.get('temporal_end'):
                 package_dict['temporal_end'] = temporal_start
 
-        # 6. dataset_accrualPeriodicity
-
-        ap_value = package_dict["dataset_accrualPeriodicity"]
-        package_dict["dataset_accrualPeriodicity"] = (
-                self.get_field_options("accrual_periodicity").get(ap_value, ap_value)
-            )
+        # 6. dataset_accrualPeriodicity: se preserva el valor que venga; default si vacío
+        if not package_dict.get("dataset_accrualPeriodicity"):
+            package_dict["dataset_accrualPeriodicity"] = "sin especificar"
 
         # 7. dataset_superTheme → sustituir siglas por URLs; default si vacío
         DEFAULT_SUPER_THEME = "Sin tema"
@@ -602,12 +698,6 @@ class XLSXHarvester(HarvesterBase):
         # 8. dataset_theme → siempre se sobrescribe
         package_dict["dataset_theme"] = "Tema específico 1"
 
-        # 9. dataset_issued / dataset_modified
-        #Si viene vacío, busca en el base info que tenga previa en la db. Es un fallback
-        if not package_dict.get("dataset_issued"):
-            package_dict["dataset_issued"] = package_dict.get("metadata_created", "")
-        if not package_dict.get("dataset_modified"):
-            package_dict["dataset_modified"] = package_dict.get("metadata_modified", "")
         package_dict['dataset_language'] = "http://publications.europa.eu/resource/authority/language/SPA"
 
         # 10. Campos faltantes en recursos/distribuciones
@@ -623,24 +713,50 @@ class XLSXHarvester(HarvesterBase):
                 if not resource.get(field):
                     resource[field] = default
 
-            resource_format = resource['format'].lower()
-            resource["category"] = next(
-                (k for k, v in self.get_field_options("category_formats").items()
-                 if resource_format in v),
-                "other"
-            )
+            # Resolver mimetype → URI IANA solo si no es ya una URI
+            media_type = resource.get("mediaType", "") or resource.get("mimetype", "")
+            if not media_type:
+                fmt = resource.get("format", "").lower()
+                media_type = self.get_field_options("format_to_mediatype").get(fmt, "")
+            if media_type.startswith("http"):
+                resource["mimetype"] = media_type
+            else:
+                resource["mimetype"] = (
+                    self.get_field_options("mimetypes").get(media_type) or "other"
+                )
+
+            # Resolver category según formato solo si no viene ya como URI
+            existing_category = resource.get("category", "")
+            if existing_category and existing_category.startswith("http"):
+                pass
+            else:
+                resource_format = resource.get("format", "").lower()
+                resource["category"] = next(
+                    (k for k, v in self.get_field_options("category_formats").items()
+                     if resource_format in v),
+                    "other"
+                )
 
         return package_dict
 
     # ---------------------------------------------------------------- helpers --
 
     def _set_config(self, config_str):
+        """Parsea config_str como JSON y lo guarda en self.config. Asigna {} si está vacío o es inválido."""
         try:
             self.config = json.loads(config_str) if config_str else {}
         except ValueError:
             self.config = {}
 
     def _fetch_workbook(self, url):
+        """
+        Descarga el archivo XLSX desde url y retorna un openpyxl Workbook.
+
+        Usa el User-Agent configurado (o "ckanext-harvest-xlsx/1.0" por defecto).
+        Lanza ValueError si la respuesta es HTML (indicando que la URL no apunta
+        directamente al archivo). Abre el workbook en modo read-only y data-only
+        para mayor eficiencia con archivos grandes.
+        """
         ua = self.config.get("user_agent", "ckanext-harvest-xlsx/1.0")
         resp = requests.get(url, headers={"User-Agent": ua}, timeout=60)
         resp.raise_for_status()
@@ -654,7 +770,14 @@ class XLSXHarvester(HarvesterBase):
         )
 
     def _read_sheet(self, wb, sheet_name, column_map, skip=0):
-        """Lee una hoja y devuelve lista de dicts mapeados via column_map."""
+        """
+        Lee una hoja del workbook y retorna una lista de dicts con campos internos.
+
+        Omite las primeras `skip` filas, toma la siguiente como fila de encabezados
+        y mapea cada columna al nombre interno definido en column_map. Descarta filas
+        completamente vacías y columnas que no estén en column_map. Todos los valores
+        se convierten a strings y se les aplica strip().
+        """
         if sheet_name not in wb.sheetnames:
             log.warning("Hoja '%s' no encontrada en el workbook", sheet_name)
             return []
@@ -677,14 +800,20 @@ class XLSXHarvester(HarvesterBase):
             mapped = {}
             for col_header, val in raw.items():
                 field_name = column_map.get(col_header)
-                if field_name and val is not None:
-                    mapped[field_name] = str(val).strip()
+                if field_name:
+                    mapped[field_name] = str(val).strip() if val is not None else ""
             result.append(mapped)
 
         return result
 
     def _make_guid(self, ds_id, source_url, row_index, row):
-        """GUID = URL_fuente/dataset_identifier, o MD5 como fallback."""
+        """
+        Genera un GUID estable para identificar un dataset entre runs.
+
+        Si ds_id está presente, retorna "source_url/ds_id".
+        Si no, calcula el MD5 de "source_url|title|row_index" como fallback,
+        usando el título del dataset o vacío si tampoco está disponible.
+        """
         if ds_id:
             return "%s/%s" % (source_url.rstrip("/"), ds_id)
         title = row.get("title", row.get("dataset_title", ""))
@@ -693,31 +822,31 @@ class XLSXHarvester(HarvesterBase):
 
     def _build_package_dict(self, row, harvest_object):
         """
-        Construye el package_dict base con los campos críticos para CKAN:
-        title, name, owner_org, tags, resources e id.
+        Construye el package_dict base con los campos core requeridos por CKAN.
+
+        Transformaciones:
+        - Lanza ValueError si el dataset no tiene título.
+        - name: genera un slug único con _gen_new_name a partir del name o title.
+        - owner_org: si no viene en la fila, lo toma de default_owner_org en la config
+          o del owner_org del harvest source.
+        - harvest_source_url: agrega la URL fuente para trazabilidad.
+        - id del dataset: si hay raw_id en la fila, genera un UUID5 determinístico con
+          semilla "owner_org/raw_id" (mismo input → mismo UUID en cada corrida); si no
+          hay raw_id, genera un UUID4. Guarda el raw_id original en original_identifier.
+        - resources: por cada distribución en _resources (ya con claves target traducidas
+          por _read_sheet), construye un dict con url, name, format, description más
+          cualquier campo extra que no sea core; omite las que no tienen url. El ID se
+          genera con UUID5 ("pkg_id/distribution_identifier") si hay identificador, o
+          UUID4 si no. Guarda el identificador original en original_identifier si difiere.
+        - Si no hay distribuciones válidas, agrega un recurso de auxilio apuntando
+          al archivo XLSX fuente.
         """
         pkg = dict(row)
 
         if not pkg.get("title"):
             raise ValueError("El dataset no tiene título válido para CKAN")
 
-        # Preservar el name existente en updates para evitar conflictos.
-        # Se guarda existing_pkg para reutilizarlo en la resolución de IDs de recursos.
-        existing_id = self._get_existing_package_id(harvest_object)
-        existing_pkg = None
-        if existing_id:
-            try:
-                existing_pkg = toolkit.get_action("package_show")(
-                    {"ignore_auth": True}, {"id": existing_id}
-                )
-                pkg["name"] = existing_pkg["name"]
-            except toolkit.ObjectNotFound:
-                log.warning(
-                    "Package %s ya no existe, se generará un name nuevo", existing_id
-                )
-                pkg["name"] = self._gen_new_name(pkg.get("name") or pkg["title"])
-        else:
-            pkg["name"] = self._gen_new_name(pkg.get("name") or pkg["title"])
+        pkg["name"] = self._gen_new_name(pkg.get("name") or pkg["title"])
 
         # Organización dueña
         if not pkg.get("owner_org"):
@@ -746,67 +875,48 @@ class XLSXHarvester(HarvesterBase):
         # ID único del dataset (se resuelve antes de los recursos para poder
         # usarlo como semilla en el UUID5 de cada distribución)
         raw_id = pkg.get("id", "").strip()
-        if existing_id:
-            pkg["id"] = existing_id
-        elif raw_id and self._is_valid_uuid(raw_id):
-            pkg["id"] = raw_id
-        elif raw_id:
-            seed = "%s/%s" % (pkg.get("owner_org", ""), raw_id)
-            pkg["id"] = str(uuid.uuid5(uuid.NAMESPACE_DNS, seed))
+        if raw_id:
+            text = "%s/%s" % (pkg.get("owner_org", ""), raw_id)
+            pkg["id"] = str(uuid.uuid5(uuid.NAMESPACE_DNS, text))
         else:
             pkg["id"] = str(uuid.uuid4())
 
         if raw_id and raw_id != pkg["id"]:
-            pkg["origin_id"] = raw_id
-
-        # Índice de IDs de recursos existentes por distribution_identifier
-        # (usado para preservar el ID CKAN de la distribución en updates)
-        existing_res_by_dist_id = {}
-        if existing_pkg:
-            for r in existing_pkg.get("resources", []):
-                dist_id = r.get("distribution_identifier", "").strip()
-                if dist_id:
-                    existing_res_by_dist_id[dist_id] = r["id"]
+            pkg["original_identifier"] = raw_id
 
         # Procesar distribuciones (_resources → resources)
         resources_raw  = pkg.pop("_resources", [])
         resources_list = []
 
+        CORE_DIST_KEYS = {"url", "name", "format", "description", "id", "distribution_identifier"}
+
         for dist in resources_raw:
-            res_url = (dist.get("distribution_download_url") or dist.get("url") or "").strip()
+            res_url = dist.get("url", "").strip()
             if not res_url:
                 continue
 
             res = {
                 "url":         res_url,
-                "name":        dist.get("name") or dist.get("distribution_name") or pkg["title"],
-                "format":      (dist.get("distribution_format") or dist.get("format") or "").strip().upper(),
-                "description": dist.get("distribution_description") or dist.get("description", ""),
+                "name":        dist.get("name") or pkg["title"],
+                "format":      (dist.get("format") or "").strip().upper(),
+                "description": dist.get("description", ""),
             }
 
-            # Campos extendidos de la distribución
+            # Campos extendidos: todo lo que no es un campo core ya mapeado
             for clave, valor in dist.items():
-                if clave not in ("url", "distribution_download_url", "name", "distribution_name",
-                                 "format", "distribution_format", "description",
-                                 "distribution_description", "id"):
-                    val_str = str(valor or "").strip()
-                    if val_str:
-                        res[clave] = val_str
+                if clave not in CORE_DIST_KEYS:
+                    res[clave] = str(valor or "").strip()
 
             # ID único de la distribución (misma lógica que el dataset)
             raw_dist_id = dist.get("distribution_identifier", "").strip()
-            if raw_dist_id and raw_dist_id in existing_res_by_dist_id:
-                res["id"] = existing_res_by_dist_id[raw_dist_id]
-            elif raw_dist_id and self._is_valid_uuid(raw_dist_id):
-                res["id"] = raw_dist_id
-            elif raw_dist_id:
-                seed = "%s/%s" % (pkg["id"], raw_dist_id)
-                res["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+            if raw_dist_id:
+                text = "%s/%s" % (pkg["id"], raw_dist_id)
+                res["id"] = str(uuid.uuid5(uuid.NAMESPACE_DNS, text))
             else:
                 res["id"] = str(uuid.uuid4())
 
             if raw_dist_id and raw_dist_id != res["id"]:
-                res["origin_id"] = raw_dist_id
+                res["original_identifier"] = raw_dist_id
 
             resources_list.append(res)
 
@@ -824,12 +934,10 @@ class XLSXHarvester(HarvesterBase):
 
     def _format_super_theme(self, raw_value):
         """
-        Convierte el valor de superTheme del XLSX al formato de lista JSON
-        que espera modify_package_dict (ej. '["AGRI"]').
-        Acepta:
-          - "AGRI"           → '["AGRI"]'
-          - "AGRI, SOCI"     → '["AGRI", "SOCI"]'
-          - '["AGRI"]'       → '["AGRI"]'  (ya está en formato correcto)
+        Normaliza raw_value al formato de lista JSON que espera modify_package_dict.
+
+        Acepta una sigla simple ("AGRI"), una lista separada por comas ("AGRI, SOCI")
+        o un array JSON ya serializado ('["AGRI"]'). Retorna "" para valores vacíos.
         """
         if not raw_value:
             return ""
@@ -839,43 +947,7 @@ class XLSXHarvester(HarvesterBase):
         items = [v.strip() for v in raw_value.split(",") if v.strip()]
         return json.dumps(items)
 
-    def _get_existing_package_id(self, harvest_object):
-        """
-        Devuelve el ID interno del package si el dataset ya fue harvested,
-        o None si es la primera vez.
-        """
-        if harvest_object.package_id:
-            return harvest_object.package_id
-
-        previous = (
-            HarvestObject.Session.query(HarvestObject)
-            .filter(HarvestObject.guid == harvest_object.guid)
-            .filter(HarvestObject.package_id != None)   # noqa: E711
-            .filter(HarvestObject.id != harvest_object.id)
-            .order_by(HarvestObject.gathered.desc())
-            .first()
-        )
-        if previous and previous.package_id:
-            try:
-                toolkit.get_action("package_show")(
-                    {"ignore_auth": True}, {"id": previous.package_id}
-                )
-                return previous.package_id
-            except toolkit.ObjectNotFound:
-                log.warning(
-                    "Package %s ya no existe en CKAN, se creará uno nuevo",
-                    previous.package_id,
-                )
-
-        return None
-
-    def _is_valid_uuid(self, value):
-        try:
-            uuid.UUID(str(value))
-            return True
-        except ValueError:
-            return False
-
     def _save_gather_error(self, message, harvest_job):
-        log.error("XLSXHarvesterClaude gather error: %s", message)
+        """Loguea el mensaje como error y persiste un HarvestGatherError asociado al harvest_job."""
+        log.error("XLSXHarvester gather error: %s", message)
         HarvestGatherError(message=message, job=harvest_job).save()
