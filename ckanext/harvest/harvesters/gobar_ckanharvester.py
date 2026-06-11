@@ -5,6 +5,9 @@ import logging
 import os
 import uuid
 
+from ckan import model
+from ckanext.harvest.model import HarvestObject
+
 from .ckanharvester import CKANHarvester
 
 log = logging.getLogger(__name__)
@@ -54,6 +57,59 @@ class GobArCKANHarvester(CKANHarvester):
             ),
             'form_config_interface': 'Text',
         }
+
+    # ------------------------------------------------------ gather_stage --
+
+    def gather_stage(self, harvest_job):
+        """Extiende el gather_stage del CKANHarvester para incluir datasets sin cambios.
+
+        El CKANHarvester optimiza el gather pidiendo solo los datasets modificados
+        desde el último job exitoso. Cuando no hubo cambios devuelve [] y el job
+        termina sin objetos, dejando el contador "not modified" siempre en 0.
+
+        Este override detecta qué datasets ya existían (current=True) y no fueron
+        incluidos en el gather optimizado, y crea HarvestObjects para ellos copiando
+        el contenido del job anterior. El import_stage los procesará y los detectará
+        como 'unchanged' vía la comparación de metadata_modified.
+        """
+        object_ids = super().gather_stage(harvest_job)
+
+        if object_ids is None:
+            return object_ids
+
+        guids_gathered = set()
+        for obj_id in object_ids:
+            obj = HarvestObject.get(obj_id)
+            if obj:
+                guids_gathered.add(obj.guid)
+
+        q = model.Session.query(HarvestObject).filter(
+            HarvestObject.harvest_source_id == harvest_job.source.id,
+            HarvestObject.current == True,  # noqa: E712
+        )
+        if guids_gathered:
+            q = q.filter(HarvestObject.guid.notin_(guids_gathered))
+        unchanged_objects = q.all()
+
+        for prev_obj in unchanged_objects:
+            new_obj = HarvestObject(
+                guid=prev_obj.guid,
+                job=harvest_job,
+                content=prev_obj.content,
+            )
+            new_obj.save()
+            object_ids.append(new_obj.id)
+
+        return object_ids
+
+    # ------------------------------------------------------ import_stage --
+
+    def import_stage(self, harvest_object):
+        result = super().import_stage(harvest_object)
+        if result == 'unchanged':
+            harvest_object.report_status = 'not modified'
+            harvest_object.save()
+        return result
 
     # --------------------------------------------------------- fields_options --
 

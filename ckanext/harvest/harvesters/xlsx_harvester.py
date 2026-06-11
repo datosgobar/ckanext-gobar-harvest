@@ -537,6 +537,7 @@ class XLSXHarvester(HarvesterBase):
                     )
                     harvest_object.package_id = package_dict["id"]
                     harvest_object.current = True
+                    harvest_object.report_status = 'not modified'
                     harvest_object.add()
                     model.Session.query(HarvestObject).filter(
                         HarvestObject.package_id == package_dict["id"],
