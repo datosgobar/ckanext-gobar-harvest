@@ -34,6 +34,8 @@ ANDINO_V1_DATASET_COLUMN_MAP = {
     "dataset_description": "notes",
     "dataset_publisher_name": "dataset_publisher_name",
     "dataset_publisher_mbox": "dataset_publisher_mbox",
+    "dataset_contactPoint_fn": "dataset_contactPoint_fn",
+    "dataset_contactPoint_hasEmail": "dataset_contactPoint_hasEmail",
     "dataset_superTheme": "dataset_superTheme",
     "dataset_theme": "dataset_theme",
     "dataset_keyword": "dataset_keywords",
@@ -43,6 +45,7 @@ ANDINO_V1_DATASET_COLUMN_MAP = {
     "dataset_language": "dataset_language",
     "dataset_spatial": "spatial",
     "dataset_temporal": "temporal_start",
+    "dataset_landingPage": "dataset_landingPage",
     "dataset_license": "license_id",
     "dataset_source": "dataset_source",
 }
@@ -53,10 +56,14 @@ ANDINO_V1_RESOURCE_COLUMN_MAP = {
     "distribution_title": "name",
     "distribution_description": "description",
     "distribution_downloadURL": "url",
+    "distribution_fileName": "distribution_fileName",
     "distribution_format": "format",
     "distribution_mediaType": "mimetype",
-    "distribution_modified":"last_modified",
-    "distribution_issued" : "created"
+    "distribution_license": "distribution_license",
+    "distribution_byteSize": "distribution_byteSize",
+    "distribution_modified": "last_modified",
+    "distribution_issued": "created",
+    "distribution_rights": "distribution_rights",
 }
 
 # -----------------------------------------------------------------------------
@@ -99,16 +106,44 @@ ANDINO_V2_RESOURCE_COLUMN_MAP = {
     "distribution_wfs_url": "wfs_url",  # URL servicio WFS
 }
 
-DEFAULT_DATASET_SHEET      = "dataset"
-DEFAULT_DISTRIBUTION_SHEET = "distribution"
+DEFAULT_DATASET_SHEET      = ["dataset", "Dataset", "datasets", "Datasets"]
+DEFAULT_DISTRIBUTION_SHEET = ["distribution", "Distribution", "distributions", "Distributions"]
 
-DATASET_REQUIRED      = {}
+
+def _resolve_sheet_name(wb, candidates):
+    """Retorna el primer nombre de hoja del workbook que coincida con alguno de los candidatos."""
+    if isinstance(candidates, str):
+        candidates = [candidates]
+    return next((s for s in wb.sheetnames if s in candidates), None)
+
+DATASET_REQUIRED      = {"title"}
 DISTRIBUTION_REQUIRED = {"url"}
 
-# Columnas del mapping V1 que pueden no estar en el Excel (opcionales)
+# Columnas del mapping V1 que pueden no estar en el Excel (opcionales/recomendadas)
 # La validación de headers será permisiva para estas.
-ANDINO_V1_DATASET_OPTIONAL  = set()
-ANDINO_V1_RESOURCE_OPTIONAL = set()
+ANDINO_V1_DATASET_OPTIONAL = {
+    "dataset_publisher_mbox",
+    "dataset_contactPoint_fn",
+    "dataset_contactPoint_hasEmail",
+    "dataset_theme",
+    "dataset_keyword",
+    "dataset_modified",
+    "dataset_language",
+    "dataset_spatial",
+    "dataset_temporal",
+    "dataset_landingPage",
+    "dataset_license",
+}
+ANDINO_V1_RESOURCE_OPTIONAL = {
+    "distribution_description",
+    "distribution_fileName",
+    "distribution_format",
+    "distribution_mediaType",
+    "distribution_license",
+    "distribution_byteSize",
+    "distribution_modified",
+    "distribution_rights",
+}
 
 
 class XLSXHarvester(HarvesterBase):
@@ -246,6 +281,8 @@ class XLSXHarvester(HarvesterBase):
         """
         optional_keys = {k.lower() for k in (optional_keys or set())}
 
+        if sheet_name is None:
+            raise ValueError("No existe la hoja '%s'" % sheet_name)
         try:
             ws = workbook[sheet_name]
         except KeyError:
@@ -308,9 +345,9 @@ class XLSXHarvester(HarvesterBase):
             )
             return []
 
-        skip     = self.config.get("skip_rows", 0)
-        ds_sheet = self.config.get("dataset_sheet", DEFAULT_DATASET_SHEET)
-        dist_sheet = self.config.get("distribution_sheet", DEFAULT_DISTRIBUTION_SHEET)
+        skip       = self.config.get("skip_rows", 0)
+        ds_sheet   = _resolve_sheet_name(wb, self.config.get("dataset_sheet", DEFAULT_DATASET_SHEET))
+        dist_sheet = _resolve_sheet_name(wb, self.config.get("distribution_sheet", DEFAULT_DISTRIBUTION_SHEET))
 
         ds_rows = dist_rows = None
         errors = []
@@ -578,6 +615,27 @@ class XLSXHarvester(HarvesterBase):
             model.Session.commit()
             return True
 
+        except sa.exc.IntegrityError as e:
+            model.Session.rollback()
+            orig = getattr(e, "orig", None)
+            orig_type = type(orig).__name__ if orig else ""
+            if orig_type == "UniqueViolation" and "resource_pkey" in str(e):
+                resources = package_dict.get("resources", [])
+                ids = [r.get("id") for r in resources if r.get("id")]
+                dupes = sorted({i for i in ids if ids.count(i) > 1})
+                self._save_object_error(
+                    "IDs de distribución duplicados en el dataset '%s': %s. "
+                    "Revisá que los distribution_identifier sean únicos en la fuente."
+                    % (package_dict.get("name", "?"), ", ".join(dupes)),
+                    harvest_object,
+                    "Import",
+                )
+            else:
+                self._save_object_error(
+                    "Error de integridad al guardar en CKAN: %s" % str(e),
+                    harvest_object,
+                    "Import",
+                )
         except Exception as e:
             model.Session.rollback()
             self._save_object_error(
