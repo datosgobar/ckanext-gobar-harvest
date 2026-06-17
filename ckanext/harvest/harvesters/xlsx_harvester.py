@@ -5,6 +5,7 @@ import json
 import logging
 import hashlib
 import os
+import unicodedata
 import uuid
 import requests
 import openpyxl
@@ -21,6 +22,12 @@ from ckanext.harvest.model import HarvestObject, HarvestGatherError
 from .base import HarvesterBase
 
 log = logging.getLogger(__name__)
+
+
+def _normalize_str(s):
+    """Minúsculas y sin signos diacríticos para matching de nombres geográficos."""
+    s = unicodedata.normalize('NFD', s.lower())
+    return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
 log_ckan = logging.getLogger("ckan.logic.action.create")
 log_ckan.setLevel(logging.DEBUG)
 
@@ -673,7 +680,11 @@ class XLSXHarvester(HarvesterBase):
 
         # 2. dataset_status → solo se agrega si falta
         if not package_dict.get("dataset_status"):
-            package_dict["dataset_status"] = "http://purl.org/adms/status/Completed"
+            title = package_dict.get("title", "")
+            if "discontinuado" in title.lower():
+                package_dict["dataset_status"] = "http://purl.org/adms/status/Withdrawn"
+            else:
+                package_dict["dataset_status"] = "http://purl.org/adms/status/Completed"
 
         # 3. dataset_hvdCategory → solo se agrega si falta
         if not package_dict.get("dataset_hvdCategory"):
@@ -712,6 +723,17 @@ class XLSXHarvester(HarvesterBase):
             else:
                 package_dict["spatial_uri"] = ""
                 package_dict["spatial"] = ""
+
+        # Fallback: buscar nombre de provincia/región en el título si spatial_uri sigue vacío
+        if not package_dict.get("spatial_uri"):
+            title_norm = _normalize_str(package_dict.get("title", ""))
+            province_names = self.get_field_options("province_names")
+            matched_uris = list({
+                uri for name, uri in province_names.items()
+                if name in title_norm
+            })
+            if matched_uris:
+                package_dict["spatial_uri"] = matched_uris
 
         # 5. temporal_end → se deriva de temporal_start si contiene "/" (formato ISO 8601 interval)
         temporal_start = str(package_dict.get("temporal_start", "") or "")
@@ -976,6 +998,7 @@ class XLSXHarvester(HarvesterBase):
 
             if raw_dist_id and raw_dist_id != res["id"]:
                 res["original_identifier"] = raw_dist_id
+
 
             resources_list.append(res)
 

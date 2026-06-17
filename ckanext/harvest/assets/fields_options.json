@@ -14,6 +14,33 @@
     "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI",
     "INTR": "http://publications.europa.eu/resource/authority/data-theme/INTR"
   },
+  "province_names": {
+    "ciudad autonoma de buenos aires": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
+    "caba":                            "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
+    "buenos aires":                    "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Buenos-Aires",
+    "catamarca":                       "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Catamarca",
+    "cordoba":                         "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Cordoba",
+    "corrientes":                      "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Corrientes",
+    "chaco":                           "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Chaco",
+    "chubut":                          "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Chubut",
+    "entre rios":                      "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Entre-Rios",
+    "formosa":                         "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Formosa",
+    "jujuy":                           "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Jujuy",
+    "la pampa":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/La-Pampa",
+    "la rioja":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/La-Rioja",
+    "mendoza":                         "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Mendoza",
+    "misiones":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Misiones",
+    "neuquen":                         "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Neuquen",
+    "rio negro":                       "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Rio-Negro",
+    "salta":                           "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Salta",
+    "san juan":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/San-Juan",
+    "san luis":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/San-Luis",
+    "santa cruz":                      "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santa-Cruz",
+    "santa fe":                        "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santa-Fe",
+    "santiago del estero":             "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Santiago-del-Estero",
+    "tucuman":                         "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tucuman",
+    "tierra del fuego":                "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Tierra-del-Fuego"
+  },
   "province_codes": {
 
     "02": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",

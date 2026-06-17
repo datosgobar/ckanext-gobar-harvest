@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import json
 import logging
 import os
+import unicodedata
 import uuid
 
 from ckan import model
@@ -11,6 +12,12 @@ from ckanext.harvest.model import HarvestObject
 from .ckanharvester import CKANHarvester
 
 log = logging.getLogger(__name__)
+
+
+def _normalize_str(s):
+    """Minúsculas y sin signos diacríticos para matching de nombres geográficos."""
+    s = unicodedata.normalize('NFD', s.lower())
+    return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
 
 #TODO: una vez que se implemente script para actualización automática de status, reveer el hardcode de 'status'
 #TODO: una vez que se implementen valores de hvdCategory, cambiar valor default
@@ -314,6 +321,17 @@ class GobArCKANHarvester(CKANHarvester):
                 package_dict['spatial_uri'] = ''
                 package_dict['spatial'] = ''
 
+        # 5b. Fallback: buscar nombre de provincia/región en el título si spatial_uri sigue vacío
+        if not package_dict.get('spatial_uri'):
+            title_norm = _normalize_str(package_dict.get('title', ''))
+            province_names = self.get_field_options('province_names')
+            matched_uris = list({
+                uri for name, uri in province_names.items()
+                if name in title_norm
+            })
+            if matched_uris:
+                package_dict['spatial_uri'] = matched_uris
+
         # 6. temporal_start → normalizar sufijo Z y partir intervalo ISO 8601
         temporal_start = str(package_dict.get('temporal_start', '') or '')
         temporal_start = temporal_start.replace('Z', '+00:00')
@@ -330,7 +348,11 @@ class GobArCKANHarvester(CKANHarvester):
 
         # 7. Defaults de campos opcionales
         if not package_dict.get('dataset_status'):
-            package_dict['dataset_status'] = 'http://purl.org/adms/status/Completed'
+            title = package_dict.get('title', '')
+            if 'discontinuado' in title.lower():
+                package_dict['dataset_status'] = 'http://purl.org/adms/status/Withdrawn'
+            else:
+                package_dict['dataset_status'] = 'http://purl.org/adms/status/Completed'
 
         if not package_dict.get('dataset_hvdCategory'):
             package_dict['dataset_hvdCategory'] = 'no aplica'
