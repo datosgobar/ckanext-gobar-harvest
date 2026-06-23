@@ -1002,13 +1002,10 @@ class XLSXHarvester(HarvesterBase):
 
             resources_list.append(res)
 
-        # Recurso de auxilio si no hay distribuciones válidas
         if not resources_list:
-            resources_list = [{
-                "url":    harvest_object.source.url,
-                "format": "XLSX",
-                "name":   "Archivo fuente XLSX",
-            }]
+            raise ValueError(
+                "El dataset '%s' no tiene distribuciones con URL válida." % pkg.get("title", "?")
+            )
 
         pkg["resources"] = resources_list
 
