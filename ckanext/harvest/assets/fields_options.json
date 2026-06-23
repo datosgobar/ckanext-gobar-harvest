@@ -1,18 +1,19 @@
 {
   "superthemes": {
-    "TECH": "http://publications.europa.eu/resource/authority/data-theme/TECH",
-    "ECON": "http://publications.europa.eu/resource/authority/data-theme/ECON",
-    "EDUC": "http://publications.europa.eu/resource/authority/data-theme/EDUC",
-    "SOCI": "http://publications.europa.eu/resource/authority/data-theme/SOCI",
-    "ENER": "http://publications.europa.eu/resource/authority/data-theme/ENER",
-    "GOVE": "http://publications.europa.eu/resource/authority/data-theme/GOVE",
-    "JUST": "http://publications.europa.eu/resource/authority/data-theme/JUST",
-    "ENVI": "http://publications.europa.eu/resource/authority/data-theme/ENVI",
-    "AGRI": "http://publications.europa.eu/resource/authority/data-theme/AGRI",
-    "HEAL": "http://publications.europa.eu/resource/authority/data-theme/HEAL",
-    "TRAN": "http://publications.europa.eu/resource/authority/data-theme/TRAN",
-    "REGI": "http://publications.europa.eu/resource/authority/data-theme/REGI",
-    "INTR": "http://publications.europa.eu/resource/authority/data-theme/INTR"
+    "AGRI":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/AGRI",
+    "DEFE":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/DEFE",
+    "ECON":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ECON",
+    "EDUC":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/EDUC",
+    "ENER":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ENER",
+    "ENVI":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ENVI",
+    "GOVE":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/GOVE",
+    "HEAL":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/HEAL",
+    "INTR":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/INTR",
+    "JUST":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/JUST",
+    "SOCI":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/SOCI",
+    "TECH":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TECH",
+    "TERRI": "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TERRI",
+    "TRAN":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TRAN"
   },
   "province_names": {
     "ciudad autonoma de buenos aires": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
