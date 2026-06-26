@@ -17,6 +17,7 @@
   },
   "province_names": {
     "ciudad autonoma de buenos aires": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
+    "ciudad de buenos aires":          "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
     "caba":                            "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
     "buenos aires":                    "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Buenos-Aires",
     "catamarca":                       "https://infra.datos.gob.ar/vocabulario/territorio-argentina/Provincia/Catamarca",

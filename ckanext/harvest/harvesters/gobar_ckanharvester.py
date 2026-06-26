@@ -325,9 +325,11 @@ class GobArCKANHarvester(CKANHarvester):
         if not package_dict.get('spatial_uri'):
             title_norm = _normalize_str(package_dict.get('title', ''))
             province_names = self.get_field_options('province_names')
+            matches = [(name, uri) for name, uri in province_names.items() if name in title_norm]
+            matched_name_set = {name for name, _ in matches}
             matched_uris = list({
-                uri for name, uri in province_names.items()
-                if name in title_norm
+                uri for name, uri in matches
+                if not any(name != other and name in other for other in matched_name_set)
             })
             if matched_uris:
                 package_dict['spatial_uri'] = matched_uris
@@ -349,7 +351,7 @@ class GobArCKANHarvester(CKANHarvester):
         # 7. Defaults de campos opcionales
         if not package_dict.get('dataset_status'):
             title = package_dict.get('title', '')
-            if 'discontinuado' in title.lower():
+            if 'discontinuad' in title.lower():
                 package_dict['dataset_status'] = 'http://purl.org/adms/status/Withdrawn'
             else:
                 package_dict['dataset_status'] = 'http://purl.org/adms/status/Completed'
