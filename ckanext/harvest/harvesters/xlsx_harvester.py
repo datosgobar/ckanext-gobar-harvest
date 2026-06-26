@@ -783,6 +783,18 @@ class XLSXHarvester(HarvesterBase):
 
         package_dict['dataset_language'] = "http://publications.europa.eu/resource/authority/language/SPA"
 
+        # Asignar grupos según dataset_superTheme (ya resuelto a URIs en paso 7)
+        supertheme_to_group = self.get_field_options('supertheme_to_group')
+        themes = package_dict.get('dataset_superTheme', [])
+        if supertheme_to_group and isinstance(themes, list):
+            groups = [
+                {'name': supertheme_to_group[uri]}
+                for uri in themes
+                if uri in supertheme_to_group
+            ]
+            if groups:
+                package_dict['groups'] = groups
+
         # 10. Campos faltantes en recursos/distribuciones
         DISTRIBUTION_DEFAULTS = {
             "character_set": "",

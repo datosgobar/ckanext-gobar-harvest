@@ -371,6 +371,18 @@ class GobArCKANHarvester(CKANHarvester):
         # TODO: sobreescribe dataset_theme hasta que el tesauro esté en revisión
         package_dict['dataset_theme'] = 'Tema específico 1'
 
+        # Asignar grupos según dataset_superTheme (ya resuelto a URIs en paso 4)
+        supertheme_to_group = self.get_field_options('supertheme_to_group')
+        themes = package_dict.get('dataset_superTheme', [])
+        if supertheme_to_group and isinstance(themes, list):
+            groups = [
+                {'name': supertheme_to_group[uri]}
+                for uri in themes
+                if uri in supertheme_to_group
+            ]
+            if groups:
+                package_dict['groups'] = groups
+
         # 8. UUID5 para el dataset: UUID5(NAMESPACE_DNS, "owner_org/raw_id")
         raw_id = str(package_dict.get('id', '') or '').strip()
         if raw_id:

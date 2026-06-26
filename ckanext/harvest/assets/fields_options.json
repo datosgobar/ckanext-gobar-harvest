@@ -15,6 +15,22 @@
     "TERRI": "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TERRI",
     "TRAN":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TRAN"
   },
+  "supertheme_to_group": {
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/AGRI":  "agroganaderia-pesca-y-forestacion",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/DEFE":             "defensa",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ECON":  "economia",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/EDUC":  "educacion-cultura-y-deportes",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ENER":  "energia",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/ENVI":  "medio-ambiente",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/GOVE":  "gobierno-y-sector-publico",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/HEAL":  "salud",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/INTR":  "asuntos-internacionales",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/JUST":  "justicia-y-seguridad",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/SOCI":  "poblacion-y-sociedad",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TECH":  "ciencia-y-tecnologia",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TERRI": "territorio",
+    "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TRAN":  "transporte"
+  },
   "province_names": {
     "ciudad autonoma de buenos aires": "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
     "ciudad de buenos aires":          "https://infra.datos.gob.ar/vocabulario/territorio-argentina/CABA/Ciudad-Autonoma-de-Buenos-Aires",
