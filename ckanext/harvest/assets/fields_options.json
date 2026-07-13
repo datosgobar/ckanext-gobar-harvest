@@ -13,7 +13,8 @@
     "SOCI":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/SOCI",
     "TECH":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TECH",
     "TERRI": "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TERRI",
-    "TRAN":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TRAN"
+    "TRAN":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TRAN",
+    "REGI":  "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/TERRI"
   },
   "supertheme_to_group": {
     "https://infra.datos.gob.ar/vocabulario/temas-datos-gob-ar/SuperTheme/AGRI":  "agroganaderia-pesca-y-forestacion",
