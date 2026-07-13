@@ -650,7 +650,7 @@ class XLSXHarvester(HarvesterBase):
                 harvest_object,
                 "Import",
             )
-            raise e
+
 
     # ---------------------------------------------------- modify_package_dict --
 
