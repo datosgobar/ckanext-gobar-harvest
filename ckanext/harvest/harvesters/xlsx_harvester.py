@@ -5,6 +5,7 @@ import json
 import logging
 import hashlib
 import os
+import re
 import unicodedata
 import uuid
 import requests
@@ -28,6 +29,15 @@ def _normalize_str(s):
     """Minúsculas y sin signos diacríticos para matching de nombres geográficos."""
     s = unicodedata.normalize('NFD', s.lower())
     return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+
+
+# Frases que contienen nombres de provincias pero no refieren a ellas
+_SPATIAL_EXCLUSION_PHRASES = [
+    "precios corrientes",
+    "pesos corrientes",
+    "aguas corrientes",
+]
+_SPATIAL_EXCLUSION_PHRASES_NORM = [_normalize_str(p) for p in _SPATIAL_EXCLUSION_PHRASES]
 log_ckan = logging.getLogger("ckan.logic.action.create")
 log_ckan.setLevel(logging.DEBUG)
 
@@ -727,8 +737,11 @@ class XLSXHarvester(HarvesterBase):
         # Fallback: buscar nombre de provincia/región en el título si spatial_uri sigue vacío
         if not package_dict.get("spatial_uri"):
             title_norm = _normalize_str(package_dict.get("title", ""))
+            for phrase in _SPATIAL_EXCLUSION_PHRASES_NORM:
+                title_norm = title_norm.replace(phrase, "")
             province_names = self.get_field_options("province_names")
-            matches = [(name, uri) for name, uri in province_names.items() if name in title_norm]
+            matches = [(name, uri) for name, uri in province_names.items()
+                       if re.search(r'\b' + re.escape(name) + r'\b', title_norm)]
             matched_name_set = {name for name, _ in matches}
             matched_uris = list({
                 uri for name, uri in matches

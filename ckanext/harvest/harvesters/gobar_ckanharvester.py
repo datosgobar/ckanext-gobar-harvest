@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import json
 import logging
 import os
+import re
 import unicodedata
 import uuid
 
@@ -18,6 +19,14 @@ def _normalize_str(s):
     """Minúsculas y sin signos diacríticos para matching de nombres geográficos."""
     s = unicodedata.normalize('NFD', s.lower())
     return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+
+
+_SPATIAL_EXCLUSION_PHRASES = [
+    "precios corrientes",
+    "pesos corrientes",
+    "aguas corrientes",
+]
+_SPATIAL_EXCLUSION_PHRASES_NORM = [_normalize_str(p) for p in _SPATIAL_EXCLUSION_PHRASES]
 
 #TODO: una vez que se implemente script para actualización automática de status, reveer el hardcode de 'status'
 #TODO: una vez que se implementen valores de hvdCategory, cambiar valor default
@@ -324,8 +333,11 @@ class GobArCKANHarvester(CKANHarvester):
         # 5b. Fallback: buscar nombre de provincia/región en el título si spatial_uri sigue vacío
         if not package_dict.get('spatial_uri'):
             title_norm = _normalize_str(package_dict.get('title', ''))
+            for phrase in _SPATIAL_EXCLUSION_PHRASES_NORM:
+                title_norm = title_norm.replace(phrase, "")
             province_names = self.get_field_options('province_names')
-            matches = [(name, uri) for name, uri in province_names.items() if name in title_norm]
+            matches = [(name, uri) for name, uri in province_names.items()
+                       if re.search(r'\b' + re.escape(name) + r'\b', title_norm)]
             matched_name_set = {name for name, _ in matches}
             matched_uris = list({
                 uri for name, uri in matches
