@@ -249,6 +249,7 @@ class GobArCKANHarvester(CKANHarvester):
         ANDINO_V1_DATASET_CKAN_MAP = {
             'author':       'dataset_publisher_name',
             'author_email': 'dataset_publisher_mbox',
+            'url':          'dataset_landingPage'
         }
         for src, dst in ANDINO_V1_DATASET_CKAN_MAP.items():
             if src in package_dict:
