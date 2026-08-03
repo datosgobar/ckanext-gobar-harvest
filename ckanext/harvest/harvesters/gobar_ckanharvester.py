@@ -468,6 +468,7 @@ class GobArCKANHarvester(CKANHarvester):
             'name':                resource.get('name', ''),
             'url':                 resource.get('url', ''),
             'description':         resource.get('description', ''),
+            'distribution_accessURL' : resource.get('accessURL', ''),
             'format':              resource.get('format', ''),
             'mimetype':            resource.get('mimetype', '') or resource.get('mediaType', ''),
             'character_set':       '',

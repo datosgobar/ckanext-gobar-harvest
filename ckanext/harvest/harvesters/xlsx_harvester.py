@@ -75,6 +75,7 @@ ANDINO_V1_RESOURCE_COLUMN_MAP = {
     "distribution_downloadURL": "url",
     "distribution_fileName": "distribution_fileName",
     "distribution_format": "format",
+    "distribution_accessURL" : "distribution_accessURL",
     "distribution_mediaType": "mimetype",
     "distribution_license": "distribution_license",
     "distribution_byteSize": "distribution_byteSize",
@@ -91,6 +92,7 @@ ANDINO_V2_DATASET_COLUMN_MAP = {
     "dataset_title": "title",
     "dataset_publisher_name": "dataset_publisher_name",
     "dataset_publisher_mbox": "dataset_publisher_mbox",
+    "dataset_landingPage": "dataset_landingPage",
     "dataset_description": "notes",
     "dataset_issued": "dataset_issued",
     "dataset_modified": "dataset_modified",
@@ -115,6 +117,7 @@ ANDINO_V2_RESOURCE_COLUMN_MAP = {
     "distribution_name": "name",  # dct:title del recurso ← "name" en v2
     "distribution_description": "description",  # dct:description
     "distribution_format": "format",  # dct:format
+    "distribution_accessURL" : "distribution_accessURL",
     "distribution_mediaType": "mediaType",  # dcat:mediaType #
     "distribution_character_set": "character_set",  # cnt:characterEncoding
     "distribution_scale": "scale",  # escala geográfica
@@ -155,6 +158,7 @@ ANDINO_V1_RESOURCE_OPTIONAL = {
     "distribution_description",
     "distribution_fileName",
     "distribution_format",
+    "distribution_accessURL",
     "distribution_mediaType",
     "distribution_license",
     "distribution_byteSize",
