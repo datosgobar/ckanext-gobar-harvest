@@ -149,13 +149,26 @@ class GobArCKANHarvester(CKANHarvester):
             self._field_options = None
         if self._field_options:
             return self._field_options
-        path = os.path.join(os.path.dirname(__file__), '../assets/fields_options.json')
+        assets_dir = os.path.join(os.path.dirname(__file__), '../assets')
+        path = os.path.join(assets_dir, 'fields_options.json')
         try:
             with open(path, 'r') as f:
                 self._field_options = json.load(f)
         except Exception as e:
             log.warning('Error cargando fields_options.json en %s: %s', path, e)
             self._field_options = {}
+
+        temas_path = os.path.join(assets_dir, 'package_temas.json')
+        try:
+            with open(temas_path, 'r') as f:
+                temas_raw = json.load(f)
+            self._field_options['package_temas'] = {
+                pkg_id: entry.get('temas', []) or []
+                for pkg_id, entry in temas_raw.items()
+            }
+        except Exception as e:
+            log.warning('Error cargando package_temas.json en %s: %s', temas_path, e)
+            self._field_options.setdefault('package_temas', {})
         return self._field_options
 
     def get_field_options(self, field_name):
@@ -223,8 +236,10 @@ class GobArCKANHarvester(CKANHarvester):
              metadata_modified del paquete CKAN si están vacíos
            - dataset_language: siempre se sobreescribe con la URI del español
              (EU Publications Office), independientemente del valor remoto
-           - dataset_theme: siempre 'Tema específico 1' hasta que el tesauro
-             local esté disponible
+           - dataset_theme: se resuelve por pkg_id (UUID5 ya generado) contra el
+             mapping package_temas; asigna ['Sin tema específico'] si el id no
+             mapea o mapea a lista vacía. Nota: se calcula DESPUÉS del paso 8
+             porque necesita el UUID5 final.
 
         8. ID del dataset con UUID5:
            Genera un UUID5 determinista usando NAMESPACE_DNS y la semilla
@@ -381,9 +396,6 @@ class GobArCKANHarvester(CKANHarvester):
             'http://publications.europa.eu/resource/authority/language/SPA'
         )
 
-        # TODO: sobreescribe dataset_theme hasta que el tesauro esté en revisión
-        package_dict['dataset_theme'] = 'Tema específico 1'
-
         # Asignar grupos según dataset_superTheme (ya resuelto a URIs en paso 4)
         supertheme_to_group = self.get_field_options('supertheme_to_group')
         themes = package_dict.get('dataset_superTheme', [])
@@ -407,6 +419,12 @@ class GobArCKANHarvester(CKANHarvester):
             package_dict['original_identifier'] = raw_id
 
         pkg_id = package_dict['id']
+
+        # dataset_theme → lookup por pkg_id (UUID5 ya generado);
+        # default ['Sin tema específico'] si el id no está en package_temas o mapea a lista vacía
+        temas_map = self.get_field_options('package_temas')
+        temas = temas_map.get(pkg_id, [])
+        package_dict['dataset_theme'] = temas if temas else ['Sin tema específico']
 
         # 9. UUID5 para cada recurso: UUID5(NAMESPACE_URL, "pkg_id/raw_res_id")
         for resource in package_dict.get('resources', []):

@@ -277,13 +277,26 @@ class XLSXHarvester(HarvesterBase):
             self._field_options = None
         if self._field_options:
             return self._field_options
-        path = os.path.join(os.path.dirname(__file__), "../assets/fields_options.json")
+        assets_dir = os.path.join(os.path.dirname(__file__), "../assets")
+        path = os.path.join(assets_dir, "fields_options.json")
         try:
             with open(path, "r") as f:
                 self._field_options = json.load(f)
         except Exception as e:
             log.warning("Error cargando fields_options.json en %s: %s", path, e)
             self._field_options = {}
+
+        temas_path = os.path.join(assets_dir, "package_temas.json")
+        try:
+            with open(temas_path, "r") as f:
+                temas_raw = json.load(f)
+            self._field_options["package_temas"] = {
+                pkg_id: entry.get("temas", []) or []
+                for pkg_id, entry in temas_raw.items()
+            }
+        except Exception as e:
+            log.warning("Error cargando package_temas.json en %s: %s", temas_path, e)
+            self._field_options.setdefault("package_temas", {})
         return self._field_options
 
     def get_field_options(self, field_name):
@@ -683,7 +696,8 @@ class XLSXHarvester(HarvesterBase):
         - dataset_accrualPeriodicity: se preserva el valor tal como viene, sin mapeo.
         - dataset_superTheme: parsea string CSV o array JSON, mapea siglas a URLs vía superthemes;
           asigna ["Sin tema"] si el resultado es vacío.
-        - dataset_theme: sobreescribe siempre con "Tema específico 1".
+        - dataset_theme: se resuelve por id (UUID5 ya generado) contra el mapping
+          package_temas; asigna ["Sin tema específico"] si no hay match o mapea a vacío.
         - dataset_issued / dataset_modified: si están vacíos, los toma de metadata_created /
           metadata_modified del paquete existente en CKAN.
         - dataset_language: asigna siempre la URI del español (EU Publications Office).
@@ -795,8 +809,11 @@ class XLSXHarvester(HarvesterBase):
         else:
             package_dict["dataset_superTheme"] = [DEFAULT_SUPER_THEME]
 
-        # 8. dataset_theme → siempre se sobrescribe
-        package_dict["dataset_theme"] = "Tema específico 1"
+        # 8. dataset_theme → lookup por id (ya resuelto a UUID5 en _build_package_dict);
+        # default ['Sin tema específico'] si el id no está en package_temas o mapea a lista vacía
+        temas_map = self.get_field_options("package_temas")
+        temas = temas_map.get(package_dict.get("id"), [])
+        package_dict["dataset_theme"] = temas if temas else ["Sin tema específico"]
 
         package_dict['dataset_language'] = "http://publications.europa.eu/resource/authority/language/SPA"
 
