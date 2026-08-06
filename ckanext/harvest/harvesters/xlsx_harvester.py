@@ -955,13 +955,15 @@ class XLSXHarvester(HarvesterBase):
 
         Transformaciones:
         - Lanza ValueError si el dataset no tiene título.
-        - name: genera un slug único con _gen_new_name a partir del name o title.
         - owner_org: si no viene en la fila, lo toma de default_owner_org en la config
           o del owner_org del harvest source.
         - harvest_source_url: agrega la URL fuente para trazabilidad.
         - id del dataset: si hay raw_id en la fila, genera un UUID5 determinístico con
           semilla "owner_org/raw_id" (mismo input → mismo UUID en cada corrida); si no
           hay raw_id, genera un UUID4. Guarda el raw_id original en original_identifier.
+        - name: se resuelve DESPUÉS del id. Si el dataset ya existe en BD (no
+          deleted), reusa su name para preservar el slug/URL pública entre
+          corridas; si no, genera uno nuevo con _gen_new_name.
         - resources: por cada distribución en _resources (ya con claves target traducidas
           por _read_sheet), construye un dict con url, name, format, description más
           cualquier campo extra que no sea core; omite las que no tienen url. El ID se
@@ -974,8 +976,6 @@ class XLSXHarvester(HarvesterBase):
 
         if not pkg.get("title"):
             raise ValueError("El dataset no tiene título válido para CKAN")
-
-        pkg["name"] = self._gen_new_name(pkg.get("name") or pkg["title"])
 
         # Organización dueña
         if not pkg.get("owner_org"):
@@ -1012,6 +1012,15 @@ class XLSXHarvester(HarvesterBase):
 
         if raw_id and raw_id != pkg["id"]:
             pkg["original_identifier"] = raw_id
+
+        # Name: reusa el existente si el dataset ya está en BD para preservar
+        # el slug (y por ende la URL pública) entre corridas. Si no existe o
+        # está soft-deleted, genera uno nuevo con _gen_new_name.
+        existing_pkg = model.Package.get(pkg["id"])
+        if existing_pkg and existing_pkg.state != "deleted":
+            pkg["name"] = existing_pkg.name
+        else:
+            pkg["name"] = self._gen_new_name(pkg.get("name") or pkg["title"])
 
         # Procesar distribuciones (_resources → resources)
         resources_raw  = pkg.pop("_resources", [])
